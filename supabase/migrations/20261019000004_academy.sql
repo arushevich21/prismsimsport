@@ -5,14 +5,28 @@
 do $$ begin
   if to_regclass('public.inquiries') is not null then
     alter table public.inquiries
-      add column if not exists status text not null default 'pending',
+      add column if not exists status text,
       add column if not exists decided_at timestamptz,
       add column if not exists created_at timestamptz not null default now();
-    begin
-      alter table public.inquiries
-        add constraint inquiries_status_check check (status in ('pending', 'approved', 'declined'));
-    exception when duplicate_object then null;
-    end;
+
+    -- The table may already have had a status column with its own values.
+    -- Map the obvious ones; anything else goes back to pending so it shows
+    -- up in the coach queue. (Access comes from the students table, never
+    -- from this column, so nobody gains access through this mapping.)
+    update public.inquiries
+    set status = case
+      when lower(trim(status)) in ('approved', 'accepted', 'active') then 'approved'
+      when lower(trim(status)) in ('declined', 'rejected', 'denied') then 'declined'
+      else 'pending'
+    end
+    where status is null or status not in ('pending', 'approved', 'declined');
+
+    alter table public.inquiries alter column status set default 'pending';
+    alter table public.inquiries alter column status set not null;
+
+    alter table public.inquiries drop constraint if exists inquiries_status_check;
+    alter table public.inquiries
+      add constraint inquiries_status_check check (status in ('pending', 'approved', 'declined'));
     -- Anyone already approved (now a student) is marked approved.
     update public.inquiries i
     set status = 'approved'
