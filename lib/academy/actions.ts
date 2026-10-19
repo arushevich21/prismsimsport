@@ -2,9 +2,12 @@
 
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
+import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
-import { postDiscordEmbed } from '@/lib/discord'
-import { SITE_URL } from '@/lib/site'
+import {
+  notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
+  onCoachAdded, onStudentApproved, onStudentRemoved,
+} from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { TELEMETRY_EXTENSIONS, TIERS, type Tier } from './constants'
@@ -56,17 +59,14 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
       car_series: carSeries,
     })
     if (error) return fail('Could not save your application. Please try again.')
-    await postDiscordEmbed(process.env.DISCORD_WEBHOOK_URL, {
-      title: 'New coaching application',
-      fields: [
-        { name: 'Discord', value: discordHandle, inline: true },
+    after(() =>
+      notifyNewApplication(discordHandle, [
         { name: 'What to improve', value: improve },
         { name: 'Goals', value: goals },
         { name: 'Experience', value: experience },
         ...(carSeries ? [{ name: 'Car / Series', value: carSeries }] : []),
-        { name: 'Review', value: `${SITE_URL}/coach?tab=applications` },
-      ],
-    })
+      ])
+    )
   }
   redirect('/pending')
 }
@@ -87,6 +87,12 @@ export async function approveApplication(fd: FormData): Promise<void> {
   await admin.from('inquiries').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id)
   // Keep the legacy flag in step until the old tables are retired.
   await admin.from('members').update({ active: true, tier }).eq('user_id', inquiry.user_id)
+  after(async () => {
+    const { data: coach } = coachId
+      ? await admin.from('profiles').select('display_name, discord_username').eq('id', coachId).maybeSingle()
+      : { data: null }
+    await onStudentApproved(inquiry.user_id, coach ? coach.display_name || coach.discord_username : null)
+  })
   revalidatePath('/coach', 'layout')
 }
 
@@ -120,6 +126,12 @@ export async function setTeamReady(studentId: string, ready: boolean): Promise<R
   const supabase = await createClient()
   const { error } = await supabase.from('students').update({ team_ready: ready }).eq('profile_id', studentId)
   if (error) return fail(error.message)
+  if (ready) {
+    after(async () => {
+      const { data } = await createAdminClient().from('profiles').select('display_name, discord_username').eq('id', studentId).maybeSingle()
+      await notifyTeamReady(data?.display_name || data?.discord_username || 'A student', displayName(viewer))
+    })
+  }
   revalidatePath('/coach', 'layout')
   return { ok: true }
 }
@@ -132,6 +144,7 @@ export async function removeStudent(fd: FormData): Promise<void> {
   await admin.from('students').delete().eq('profile_id', id)
   await admin.from('profiles').update({ role: 'member' }).eq('id', id).eq('role', 'student')
   await admin.from('members').update({ active: false }).eq('user_id', id)
+  after(() => onStudentRemoved(id))
   revalidatePath('/coach', 'layout')
 }
 
@@ -153,16 +166,8 @@ export async function sendMessage(studentId: string, body: string): Promise<{ ok
     .single()
   if (error) return { ok: false, error: 'Could not send. Please try again.' }
 
-  if (viewer.user.id === studentId) {
-    await postDiscordEmbed(process.env.DISCORD_QA_WEBHOOK_URL, {
-      title: 'New message for a coach',
-      fields: [
-        { name: 'From', value: displayName(viewer), inline: true },
-        { name: 'Message', value: text },
-        { name: 'Reply', value: `${SITE_URL}/coach/messages/${studentId}` },
-      ],
-    })
-  }
+  const name = displayName(viewer)
+  after(() => (viewer.user.id === studentId ? notifyCoachesOfMessage(studentId, name, text) : notifyStudentOfReply(studentId, name, text)))
   return { ok: true, id: data.id as string }
 }
 
@@ -196,15 +201,8 @@ export async function recordTelemetry(input: { path: string; filename: string; n
   })
   if (error) return fail('Uploaded, but could not save the details. Please tell your coach.')
 
-  await postDiscordEmbed(process.env.DISCORD_QA_WEBHOOK_URL, {
-    title: 'New telemetry upload',
-    fields: [
-      { name: 'From', value: displayName(viewer), inline: true },
-      { name: 'File', value: input.filename, inline: true },
-      ...(input.note.trim() ? [{ name: 'Note', value: input.note.trim() }] : []),
-      { name: 'Review', value: `${SITE_URL}/coach?tab=telemetry` },
-    ],
-  })
+  const name = displayName(viewer)
+  after(() => notifyTelemetry(viewer.user.id, name, input.filename, input.note.trim()))
   revalidatePath('/telemetry')
   revalidatePath('/dashboard')
   return { ok: true }
@@ -337,6 +335,7 @@ export async function addCoach(_prev: Result | null, fd: FormData): Promise<Resu
   const person = matches[0]!
   if (person.role !== 'admin') await admin.from('profiles').update({ role: 'coach' }).eq('id', person.id)
   await admin.from('coaches').upsert({ profile_id: person.id, title: 'Coach' }, { onConflict: 'profile_id', ignoreDuplicates: true })
+  after(() => onCoachAdded(person.id))
   revalidatePath('/coach', 'layout')
   revalidatePath('/academy')
   return { ok: true }

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { refreshPublicPages } from '@/lib/admin/actions'
+import { refreshPublicPages, removeRaceFromDiscord, syncRaceToDiscord } from '@/lib/admin/actions'
 import {
   CLASSES, dangerBtn, errorText, field, getCountryOptions, isoToLocalInput, label, localInputToIso, primaryBtn, smallBtn, uid,
 } from '@/lib/admin/shared'
@@ -157,10 +157,10 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
         }
       }
 
-      await refreshPublicPages()
+      await Promise.all([refreshPublicPages(), syncRaceToDiscord(id)])
       router.refresh()
       await loadRaces(sim, id)
-      setStatus({ kind: 'ok', text: form.published ? 'Saved and live.' : 'Saved as a draft (not shown publicly).' })
+      setStatus({ kind: 'ok', text: form.published ? 'Saved and live (and updated on Discord).' : 'Saved as a draft (not shown publicly).' })
     } catch (e) {
       setStatus({ kind: 'error', text: errorText(e) })
     } finally {
@@ -171,6 +171,7 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
   async function remove() {
     if (raceId === 'new' || !confirm('Delete this race and its lineup?')) return
     setBusy(true)
+    await removeRaceFromDiscord(raceId)
     const { error } = await createClient().from('races').delete().eq('id', raceId)
     setBusy(false)
     if (error) return setStatus({ kind: 'error', text: errorText(error) })
@@ -315,7 +316,7 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
     const { data, error } = await createClient()
       .from('drivers')
       .insert({ name: name.trim(), nickname: nickname.trim() || null, country_code: country || null, sims: [sim], main_lineup: main ? [sim] : [] })
-      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, archived, sort_order')
+      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, archived, sort_order, profile_id')
       .single()
     setBusy(false)
     if (error) return setError(errorText(error))

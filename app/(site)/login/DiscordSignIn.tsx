@@ -11,7 +11,11 @@ export function DiscordSignIn({ next }: { next: string }) {
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'discord',
-      options: { redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}` },
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        // guilds.join lets the site add people to the PRISM Discord on sign-in.
+        ...(process.env.NEXT_PUBLIC_DISCORD_AUTO_JOIN === 'true' && { scopes: 'identify email guilds.join' }),
+      },
     })
     if (error) setPending(false)
   }

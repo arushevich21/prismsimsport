@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
+import { addGuildMember } from '@/lib/discord/api'
 import { createClient } from '@/lib/supabase/server'
 
 // Discord sends the user back here with a one-time code. Exchanging it on the
@@ -10,8 +11,16 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient()
-    const { error } = await supabase.auth.exchangeCodeForSession(code)
-    if (!error) return NextResponse.redirect(`${origin}${next}`)
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+    if (!error) {
+      // Optional: add them to the PRISM server (sign-in asks for guilds.join).
+      const token = data.session?.provider_token
+      const discordId = data.user?.user_metadata?.provider_id as string | undefined
+      if (process.env.NEXT_PUBLIC_DISCORD_AUTO_JOIN === 'true' && token && discordId) {
+        after(() => addGuildMember(discordId, token))
+      }
+      return NextResponse.redirect(`${origin}${next}`)
+    }
     console.error('[auth] code exchange failed:', error.message)
   }
 

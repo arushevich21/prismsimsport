@@ -33,6 +33,10 @@ Sign in as an admin and an indigo bar appears under the header on every public p
 - Applying: `/apply` → `/pending` → approved in the coach queue (assign coach + tier).
 - Cal.com: add a webhook to `https://prismsimsport.app/api/cal/webhook` with the `CAL_WEBHOOK_SECRET` secret and the Booking created / rescheduled / cancelled triggers. Each coach needs event types `coaching-30`, `coaching-60`, `coaching-90`.
 
+## Discord
+
+The bot runs inside the site (no separate server): DMs with a Reply button for coaching chat, Academy/Coach/driver roles, lineup posts with scheduled events, and results posts. Setup steps, environment variables and suggested roles/channels: [docs/DISCORD_SETUP.md](docs/DISCORD_SETUP.md).
+
 ## Database
 
 SQL lives in `supabase/`:
@@ -43,6 +47,7 @@ SQL lives in `supabase/`:
 | `migrations/20261019000002_seed_team.sql` | Now. Makes Anton admin + coach, seeds the driver roster. |
 | `migrations/20261019000003_driver_photos.sql` | Now. Public `driver-photos` bucket; only admins can upload. |
 | `migrations/20261019000004_academy.sql` | Now. Application status, unlinked Cal.com bookings, students can see coach profiles. |
+| `migrations/20261019000005_discord.sql` | Now. Remembers each race's Discord post/event and which results were announced. |
 | `cutover/lockdown_legacy.sql` | **Only when the new Academy pages replace the old ones.** Replaces the permissive rules on the legacy tables; the old pages stop working after it runs. |
 
 Run them in the Supabase dashboard → SQL Editor, in that order. All of them are safe to re-run.

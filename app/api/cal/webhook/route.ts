@@ -1,8 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
-import { NextResponse } from 'next/server'
+import { after, NextResponse } from 'next/server'
 import { priceFor } from '@/lib/academy/constants'
-import { postDiscordEmbed } from '@/lib/discord'
-import { SITE_URL } from '@/lib/site'
+import { notifyBooking } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Cal.com → coaching_sessions. Set this up in Cal.com → Settings → Developer →
@@ -114,16 +113,8 @@ export async function POST(request: Request) {
   }
 
   if (event === 'BOOKING_CREATED') {
-    await postDiscordEmbed(process.env.DISCORD_QA_WEBHOOK_URL, {
-      title: 'New coaching session booked',
-      fields: [
-        { name: 'Student', value: attendee?.name ?? 'Unknown', inline: true },
-        { name: 'Length', value: `${lengthMinutes} min`, inline: true },
-        { name: 'When', value: `<t:${Math.floor(Date.parse(p.startTime) / 1000)}:F>` },
-        ...(studentId ? [] : [{ name: 'Needs linking', value: 'Booked without a PRISM account match. Link it in the coach queue.' }]),
-        { name: 'Queue', value: `${SITE_URL}/coach?tab=sessions` },
-      ],
-    })
+    const who = attendee?.name ?? attendee?.email ?? 'Unknown'
+    after(() => notifyBooking(coach.profile_id as string, who, lengthMinutes, row.starts_at, !!studentId))
   }
   return NextResponse.json({ ok: true })
 }

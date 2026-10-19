@@ -1,8 +1,8 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { useState } from 'react'
-import { refreshPublicPages } from '@/lib/admin/actions'
+import { useEffect, useState } from 'react'
+import { refreshPublicPages, syncRoles } from '@/lib/admin/actions'
 import { dangerBtn, errorText, field, getCountryOptions, label, primaryBtn, resizeImage, smallBtn, uid } from '@/lib/admin/shared'
 import { driverPhotoUrl } from '@/lib/photos'
 import { createClient } from '@/lib/supabase/client'
@@ -20,6 +20,7 @@ const editable = (d: AdminDriver) => ({
   main_lineup: d.main_lineup.filter((s) => d.sims.includes(s)),
   sort_order: d.sort_order,
   archived: d.archived,
+  profile_id: d.profile_id,
 })
 
 export default function RosterEditor({ sim }: { sim: Sim }) {
@@ -29,6 +30,26 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   const [filter, setFilter] = useState<Filter>(sim)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const [accounts, setAccounts] = useState<{ id: string; label: string }[]>([])
+
+  // Site accounts that can be linked to a driver (for Discord roles and mentions).
+  useEffect(() => {
+    let cancelled = false
+    createClient()
+      .from('profiles')
+      .select('id, display_name, discord_username')
+      .order('display_name')
+      .then(({ data }) => {
+        if (cancelled) return
+        setAccounts((data ?? []).map((p) => ({
+          id: p.id as string,
+          label: [p.display_name, p.discord_username && `@${p.discord_username}`].filter(Boolean).join(' · ') || 'Unnamed account',
+        })))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const patch = (id: string, p: Partial<AdminDriver>) => {
     setDrivers((ds) => ds.map((d) => (d.id === id ? { ...d, ...p } : d)))
@@ -43,7 +64,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   function addDriver() {
     const id = `new-${uid()}`
     setDrivers((ds) => [
-      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, archived: false, sort_order: 99 },
+      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, archived: false, sort_order: 99, profile_id: null },
       ...ds,
     ])
     setDirty((s) => new Set(s).add(id))
@@ -66,7 +87,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
       }
       setDirty(new Set())
       await reload()
-      await refreshPublicPages()
+      await Promise.all([refreshPublicPages(), syncRoles()])
       router.refresh()
       setStatus({ kind: 'ok', text: `Saved ${changed.length} driver${changed.length === 1 ? '' : 's'}.` })
     } catch (e) {
@@ -180,6 +201,12 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                 <select className={field} value={d.country_code ?? ''} onChange={(e) => patch(d.id, { country_code: e.target.value || null })}>
                   <option value="">Not set</option>
                   {countries.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
+                </select>
+              </label>
+              <label className={label}>Linked Discord account
+                <select className={field} value={d.profile_id ?? ''} onChange={(e) => patch(d.id, { profile_id: e.target.value || null })}>
+                  <option value="">Not linked</option>
+                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
                 </select>
               </label>
               <fieldset className="grid grid-cols-2 gap-x-3 text-sm">

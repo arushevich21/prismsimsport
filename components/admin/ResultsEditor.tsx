@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { refreshPublicPages } from '@/lib/admin/actions'
+import { announceResults, refreshPublicPages } from '@/lib/admin/actions'
 import { CLASSES, errorText, field, label, primaryBtn, smallBtn, uid } from '@/lib/admin/shared'
 import { createClient } from '@/lib/supabase/client'
 import { SIM_SHORT, type Sim } from '@/lib/types'
@@ -48,6 +48,7 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
   const [best, setBest] = useState('')
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [announce, setAnnounce] = useState(true)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   const blankRow = useCallback((): Row => ({
@@ -121,10 +122,10 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
         : await supabase.from('season_summaries').delete().eq('sim', sim).eq('season', season)
       if (sErr) throw sErr
 
-      await refreshPublicPages()
+      const [, posted] = await Promise.all([refreshPublicPages(), announce ? announceResults(sim, season) : Promise.resolve(0)])
       router.refresh()
       await load(season)
-      setStatus({ kind: 'ok', text: 'Results saved.' })
+      setStatus({ kind: 'ok', text: posted ? `Results saved. Posted ${posted} new result${posted === 1 ? '' : 's'} to Discord.` : 'Results saved.' })
     } catch (e) {
       setStatus({ kind: 'error', text: errorText(e) })
     } finally {
@@ -187,6 +188,10 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
         <span className="text-sm text-muted">{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
+        <label className="flex min-h-11 items-center gap-2 text-sm">
+          <input type="checkbox" className="h-5 w-5" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} />
+          Post new results to Discord
+        </label>
         <button type="button" className={`${primaryBtn} ml-auto`} disabled={busy || !dirty} onClick={save}>{busy ? 'Saving…' : 'Save results'}</button>
       </div>
       {status && <p role="status" className={status.kind === 'ok' ? 'text-sm text-ice-deep' : 'text-sm text-[#8a1c1c]'}>{status.text}</p>}
