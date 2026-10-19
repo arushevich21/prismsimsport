@@ -1,6 +1,8 @@
 // Site-wide links and settings. Values that change per deployment come from
 // environment variables so they can be updated in Vercel without a code change.
 
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://prismsimsport.app'
+
 export const DISCORD_INVITE_URL = process.env.NEXT_PUBLIC_DISCORD_INVITE_URL || null
 
 export const NAV_LINKS = [

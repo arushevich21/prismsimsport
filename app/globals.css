@@ -71,28 +71,10 @@
   }
 }
 
-/* ── Legacy DTS styles ─────────────────────────────────────────────────────
-   Still used by the old pages (inline var(--red), var(--font-display), …).
-   Delete this block once every page has been rebuilt. */
-:root {
-  --red: #E8192C;
-  --red-dim: #9E0F1C;
-  --off-white: #F0EDE6;
-  --cream: #C8C2B5;
-  --dark: #0D0C0B;
-  --dark-2: #161513;
-  --dark-3: #1F1D1A;
-  --dark-4: #2A2723;
-  --mid: #3D3A35;
-  --text-muted: #7A756D;
-}
-
 body {
-  background: var(--dark);
-  color: var(--off-white);
-  font-family: var(--font-body), sans-serif;
-  font-weight: 300;
-  line-height: 1.6;
+  background: var(--color-white);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   overflow-x: hidden;
 }
 

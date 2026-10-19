@@ -38,26 +38,28 @@ export async function requireRole(roles: Role[], next: string): Promise<Viewer> 
   return viewer
 }
 
-// Academy pages: approved students, coaches and admins.
-// Until the new Academy admin ships, approvals still happen in the old admin
-// page (members.active), so that flag is honoured as well.
+// Academy pages: approved students, coaches and admins. Anyone else is sent
+// to their application status (or the application form).
 export async function requireAcademyAccess(next: string): Promise<Viewer> {
   const viewer = await getViewer()
   if (!viewer) redirect(loginUrl(next))
   if (viewer.role === 'student' || viewer.role === 'coach' || viewer.role === 'admin') return viewer
 
   const supabase = await createClient()
-  const { data: member } = await supabase
-    .from('members')
-    .select('active')
-    .eq('user_id', viewer.user.id)
-    .maybeSingle()
-  if (member?.active) return viewer
-
   const { data: inquiry } = await supabase
     .from('inquiries')
     .select('id')
     .eq('user_id', viewer.user.id)
     .maybeSingle()
   redirect(inquiry ? '/pending' : '/apply')
+}
+
+export async function requireStaff(next: string): Promise<Viewer> {
+  return requireRole(['coach', 'admin'], next)
+}
+
+export async function requireSignedIn(next: string): Promise<Viewer> {
+  const viewer = await getViewer()
+  if (!viewer) redirect(loginUrl(next))
+  return viewer
 }

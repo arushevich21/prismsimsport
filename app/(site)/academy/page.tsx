@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Flag } from '@/components/site/Flag'
+import { SESSION_TYPES, formatPrice } from '@/lib/academy/constants'
 import { btn, eyebrow, h1, h2, section } from '@/lib/ui'
 
 export const metadata: Metadata = {
@@ -54,11 +55,6 @@ const TESTIMONIALS = [
   },
 ]
 
-const SESSIONS = [
-  { minutes: 30, price: '$20', bestFor: 'Quick telemetry review or dialing in a single corner or sector' },
-  { minutes: 60, price: '$35', bestFor: 'A full session on one track: driving, data, and setup' },
-  { minutes: 90, price: '$50', bestFor: 'Deep dive across multiple tracks or full race-weekend prep' },
-]
 
 const STEPS = [
   { title: 'Sign in with Discord', body: 'One account for the community, the team and the Academy.' },
@@ -162,17 +158,17 @@ export default function AcademyPage() {
           <p className="text-[17px] text-[#4a4f57]">Pay by PayPal or Zelle after booking. Booking opens once your application is approved.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-3">
-          {SESSIONS.map((s) => (
+          {SESSION_TYPES.map((s) => (
             <article key={s.minutes} className="flex flex-col gap-3 rounded-xl border border-line p-6 sm:p-8">
               <span className="font-mono text-[13px] tracking-[0.12em] text-muted">{s.minutes} MIN</span>
-              <span className="font-heading text-4xl font-bold">{s.price}</span>
+              <span className="font-heading text-4xl font-bold">{formatPrice(s.priceCents)}</span>
               <p className="flex-1 leading-relaxed text-[#4a4f57]">{s.bestFor}</p>
             </article>
           ))}
         </div>
         <div className="flex flex-col gap-3 xs:flex-row">
           <Link href="/apply" className={btn.ember}>Apply for coaching</Link>
-          <Link href="/schedule" className={btn.outlineLight}>Already a member? Book</Link>
+          <Link href="/sessions" className={btn.outlineLight}>Already a member? Book</Link>
         </div>
       </section>
 
