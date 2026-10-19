@@ -1,12 +1,9 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+const supabase = createClient()
 
 const ADMIN_USER_ID = 'eb1671b9-ea44-4681-8b7b-632344e16381'
 const TIERS = ['pending', 'student', 'driver', 'elite']

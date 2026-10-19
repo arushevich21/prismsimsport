@@ -1,12 +1,9 @@
 'use client'
 import { useEffect } from 'react'
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-)
+const supabase = createClient()
 
 export default function Login() {
   const router = useRouter()
@@ -21,12 +18,12 @@ export default function Login() {
   const handleDiscordLogin = async () => {
     const params = new URLSearchParams(window.location.search)
     const next = params.get('next')
-    const SAFE_PATHS = ['/apply', '/dashboard', '/pending']
+    const SAFE_PATHS = ['/apply', '/dashboard', '/pending', '/admin', '/library', '/setups', '/schedule', '/telemetry', '/members']
     const redirectPath = SAFE_PATHS.includes(next) ? next : '/dashboard'
     await supabase.auth.signInWithOAuth({
       provider: 'discord',
       options: {
-        redirectTo: `${window.location.origin}${redirectPath}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectPath)}`,
       },
     })
   }

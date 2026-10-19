@@ -1,5 +1,79 @@
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@import "tailwindcss";
 
+/* ── PRISM design tokens ───────────────────────────────────────────────────
+   Usage: bg-ink, text-ice, border-line, font-heading, etc.
+   Accent text on white uses the -deep shades (they pass 4.5:1 contrast);
+   the light accents are for fills and for text on dark backgrounds. */
+@theme inline {
+  --color-white: #ffffff;
+  --color-ink: #14161b;          /* main text */
+  --color-graphite: #15171c;     /* dark sections */
+  --color-graphite-2: #1e2128;   /* cards on dark */
+  --color-graphite-3: #2e333c;   /* lines on dark */
+  --color-mist: #f4f6f9;         /* light section background */
+  --color-line: #e4e7ec;         /* lines on light */
+  --color-muted: #5b6068;        /* secondary text on light */
+  --color-muted-dark: #a3a9b3;   /* secondary text on dark */
+  --color-body-dark: #c3c8d1;    /* body text on dark */
+
+  --color-ice: #9cc4f2;
+  --color-ice-deep: #2d5e96;
+  --color-iris: #a5a8f7;
+  --color-iris-deep: #4b4db8;
+  --color-ember: #ffb678;
+  --color-ember-deep: #a84f0c;
+
+  --font-heading: var(--font-unbounded), ui-sans-serif, sans-serif;
+  --font-sans: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
+
+  --breakpoint-xs: 26rem;
+}
+
+/* Page container: 16px gutters on phones, respects notches in landscape. */
+@utility page-x {
+  width: 100%;
+  max-width: 80rem;
+  margin-inline: auto;
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  @media (width >= 48rem) {
+    padding-left: max(1.5rem, env(safe-area-inset-left));
+    padding-right: max(1.5rem, env(safe-area-inset-right));
+  }
+}
+
+/* Minimum comfortable touch target. */
+@utility tap {
+  min-height: 2.75rem;
+  min-width: 2.75rem;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 16px inputs stop iOS Safari zooming in when a field is focused. */
+  input, select, textarea {
+    font-size: max(16px, 1em);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-iris-deep);
+    outline-offset: 2px;
+  }
+}
+
+/* ── Legacy DTS styles ─────────────────────────────────────────────────────
+   Still used by the old pages (inline var(--red), var(--font-display), …).
+   Delete this block once every page has been rebuilt. */
 :root {
   --red: #E8192C;
   --red-dim: #9E0F1C;
@@ -12,8 +86,6 @@
   --mid: #3D3A35;
   --text-muted: #7A756D;
 }
-
-html { scroll-behavior: smooth; }
 
 body {
   background: var(--dark);
@@ -28,5 +100,6 @@ body {
   *, *::before, *::after {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
