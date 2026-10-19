@@ -1,6 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import { getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
+import { Editable } from '@/components/admin/Editable'
 import { classChip } from '@/lib/site'
 import { SIM_SHORT, type Sim } from '@/lib/types'
 import { btn, eyebrow, h2 } from '@/lib/ui'
@@ -49,6 +50,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
       {/* Next race lineup */}
       <section id="lineup" className="scroll-mt-24 border-b border-line">
         <div className="page-x flex flex-col gap-6 py-12 sm:py-16">
+          <Editable editor="race" sim={sim}>
+          <div className="flex flex-col gap-6">
           <div className="flex flex-col gap-2">
             <span className={`${eyebrow} text-ember-deep`}>Next race lineup · {short}</span>
             {race ? (
@@ -96,6 +99,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
               ))}
             </div>
           )}
+          </div>
+          </Editable>
         </div>
       </section>
 
@@ -111,6 +116,7 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
               </div>
             )}
           </div>
+          <Editable editor="roster" sim={sim}>
           {lineup.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
               {lineup.map((d) => <DriverCard key={d.id} driver={d} />)}
@@ -118,6 +124,7 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
           ) : (
             <p className="text-muted">The lineup is being finalised.</p>
           )}
+          </Editable>
 
           <aside aria-label="Driver academy" className="mt-4 flex flex-col gap-6 rounded-xl bg-graphite p-6 text-white sm:p-10 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex max-w-2xl flex-col gap-3">
@@ -158,6 +165,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
               </nav>
             )}
           </div>
+          <Editable editor="results" sim={sim} season={season}>
+          <div className="flex flex-col gap-7">
           <dl className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
             {[
               { label: 'Races', value: String(stats.races) },
@@ -172,6 +181,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
             ))}
           </dl>
           <ResultsList results={stats.results} empty={`No ${short} results logged for ${season} yet.`} />
+          </div>
+          </Editable>
         </div>
       </section>
     </>

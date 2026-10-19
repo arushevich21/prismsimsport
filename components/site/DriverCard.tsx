@@ -1,4 +1,4 @@
-import { driverPhotoUrl } from '@/lib/data'
+import { driverPhotoUrl } from '@/lib/photos'
 import type { Driver } from '@/lib/types'
 import { Flag, countryName } from './Flag'
 

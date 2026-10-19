@@ -22,6 +22,10 @@ Checks: `npm run typecheck`, `npm run lint`, `npm run build`.
 - `proxy.ts` only keeps the session fresh. It does not decide access.
 - Database rules (RLS) are the final line of defence. Never trust a user id sent by the browser; route handlers read the user from the session.
 
+## Editing the site
+
+Sign in as an admin and an indigo bar appears under the header on every public page. Switch it to **Edit** and the outlined blocks become editors: the next race and its lineup (Home and Team), the driver roster with photos, and results per sim and season. Each block saves on its own; saving refreshes the cached public pages straight away. The editor code only loads in edit mode.
+
 ## Database
 
 SQL lives in `supabase/`:
@@ -30,6 +34,7 @@ SQL lives in `supabase/`:
 |---|---|
 | `migrations/20261019000001_prism_core.sql` | Now. Additive: new tables, roles, chat, sessions. Doesn't touch the legacy DTS tables. |
 | `migrations/20261019000002_seed_team.sql` | Now. Makes Anton admin + coach, seeds the driver roster. |
+| `migrations/20261019000003_driver_photos.sql` | Now. Public `driver-photos` bucket; only admins can upload. |
 | `cutover/lockdown_legacy.sql` | **Only when the new Academy pages replace the old ones.** Replaces the permissive rules on the legacy tables; the old pages stop working after it runs. |
 
 Run them in the Supabase dashboard → SQL Editor, in that order. All of them are safe to re-run.

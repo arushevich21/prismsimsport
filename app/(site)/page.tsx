@@ -1,5 +1,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
+import { AdminHint } from '@/components/admin/AdminHint'
+import { Editable } from '@/components/admin/Editable'
 import { NextRaceCard } from '@/components/site/NextRaceCard'
 import { PrismBeam } from '@/components/site/PrismBeam'
 import { ResultsList } from '@/components/site/ResultsList'
@@ -70,7 +72,9 @@ export default async function HomePage() {
               <Link href="/team" className={btn.outlineDark}>Meet the team</Link>
             </div>
           </div>
-          <NextRaceCard race={race} />
+          <Editable editor="race">
+            <NextRaceCard race={race} />
+          </Editable>
         </div>
       </section>
 
@@ -161,6 +165,7 @@ export default async function HomePage() {
             All results →
           </Link>
         </div>
+        <AdminHint>Results are edited on the Team page, per sim and season. <Link href="/team#results" className="font-semibold text-iris-deep underline">Go to results</Link></AdminHint>
         <ResultsList results={results} showSim empty="Results show up here after our next race." />
       </section>
 
