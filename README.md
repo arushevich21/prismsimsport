@@ -4,6 +4,8 @@ Website for PRISM (prismsimsport.app): sim racing community, eSports team (LMU, 
 
 Next.js 16 (App Router) · TypeScript · Tailwind CSS 4 · Supabase (Postgres, Discord login, storage, realtime) · Vercel.
 
+Launching or redeploying? Start with [docs/LAUNCH.md](docs/LAUNCH.md).
+
 ## Run locally
 
 ```bash

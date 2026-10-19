@@ -11,7 +11,8 @@ export const metadata: Metadata = {
   metadataBase: new URL('https://prismsimsport.app'),
   title: { default: 'PRISM', template: '%s · PRISM' },
   description: 'Sim racing community and eSports team. Le Mans Ultimate, and ACC with Falcon Motorsport.',
-  openGraph: { siteName: 'PRISM', type: 'website' },
+  openGraph: { siteName: 'PRISM', type: 'website', images: [{ url: '/og.png', width: 1200, height: 630, alt: 'PRISM' }] },
+  twitter: { card: 'summary_large_image', images: ['/og.png'] },
 }
 
 export const viewport: Viewport = {

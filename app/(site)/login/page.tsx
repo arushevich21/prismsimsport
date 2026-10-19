@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { getViewer } from '@/lib/auth'
 import { DiscordSignIn } from './DiscordSignIn'
 
-export const metadata: Metadata = { title: 'Sign in' }
+export const metadata: Metadata = { title: 'Sign in', robots: { index: false } }
 
 // Sections a sign-in may return to. Anything else falls back to the dashboard.
 const SAFE_PREFIXES = ['/apply', '/pending', '/dashboard', '/sessions', '/messages', '/telemetry', '/library', '/setups', '/coach', '/team', '/academy', '/community']

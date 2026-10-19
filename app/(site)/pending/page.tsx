@@ -6,7 +6,7 @@ import { DISCORD_INVITE_URL } from '@/lib/site'
 import { createClient } from '@/lib/supabase/server'
 import { btn, eyebrow } from '@/lib/ui'
 
-export const metadata: Metadata = { title: 'Application received' }
+export const metadata: Metadata = { title: 'Application received', robots: { index: false } }
 
 export default async function PendingPage() {
   const viewer = await requireSignedIn('/pending')

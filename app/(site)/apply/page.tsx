@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { eyebrow } from '@/lib/ui'
 import { ApplyForm } from './ApplyForm'
 
-export const metadata: Metadata = { title: 'Apply for coaching' }
+export const metadata: Metadata = { title: 'Apply for coaching', robots: { index: false } }
 
 export default async function ApplyPage() {
   const viewer = await requireSignedIn('/apply')

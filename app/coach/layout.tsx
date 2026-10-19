@@ -4,6 +4,8 @@ import { SiteHeader } from '@/components/site/SiteHeader'
 import { getQueue } from '@/lib/academy/queries'
 import { requireStaff } from '@/lib/auth'
 
+export const metadata = { robots: { index: false, follow: false } }
+
 export default async function CoachLayout({ children }: { children: React.ReactNode }) {
   const viewer = await requireStaff('/coach')
   const q = await getQueue(viewer)

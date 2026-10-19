@@ -3,6 +3,8 @@ import { SiteFooter } from '@/components/site/SiteFooter'
 import { SiteHeader } from '@/components/site/SiteHeader'
 import { requireAcademyAccess } from '@/lib/auth'
 
+export const metadata = { robots: { index: false, follow: false } }
+
 // Server-side gate for the student side of the Academy. The folder name in
 // brackets keeps URLs short (/dashboard, /sessions, …).
 export default async function AcademyLayout({ children }: { children: React.ReactNode }) {
