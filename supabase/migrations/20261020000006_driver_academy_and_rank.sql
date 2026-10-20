@@ -20,7 +20,7 @@ exception when duplicate_object then null; end $$;
 
 do $$ begin
   alter table public.drivers add constraint drivers_lmu_dr_level_check
-    check (lmu_dr_level between 1 and 3 and lmu_dr_tier is not null);
+    check (lmu_dr_level is null or (lmu_dr_level between 1 and 3 and lmu_dr_tier is not null));
 exception when duplicate_object then null; end $$;
 
 -- academy_class: the class an academy driver is developing in (Hypercar,
