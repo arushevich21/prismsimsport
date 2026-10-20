@@ -1,8 +1,8 @@
 import { getPublishedRace } from '@/lib/data'
 import { renderLineupGraphic } from '@/lib/graphics/lineup'
 
-// GET /api/graphics/lineup/<race id>[?cars=<id>,<id>]: the story-format lineup
-// PNG for a published race, optionally just some of its cars.
+// GET /api/graphics/lineup/<race id>[?cars=<id>,<id>]: the lineup PNG the bot
+// posts for a published race, optionally just some of its cars.
 export async function GET(request: Request, { params }: { params: Promise<{ raceId: string }> }) {
   const { raceId } = await params
   const url = new URL(request.url)

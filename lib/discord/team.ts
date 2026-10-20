@@ -257,18 +257,28 @@ export async function announceNewResults(sim: Sim, season: number) {
   const rows = data ?? []
   if (rows.length === 0) return 0
 
+  // One post per save: the results graphic (up to six rows) plus a text line
+  // per result, so they're searchable and readable without opening the image.
+  const batch = rows.slice(0, 6)
   const medal = (f: number) => (f === 1 ? '🥇' : f === 2 ? '🥈' : f === 3 ? '🥉' : '🏁')
+  const best = Math.min(...batch.map((r) => r.finish as number))
   const posted = await postToChannel(discordEnv.channels.results, {
-    embeds: rows.slice(0, 10).map((r) => ({
-      title: clip(`${medal(r.finish)} P${r.finish} · ${[r.championship, r.track].filter(Boolean).join(' · ') || 'Race'}`, 256),
-      description: [r.car, r.class?.toUpperCase(), r.raced_on].filter(Boolean).join(' · '),
-      color: r.finish <= 3 ? COLORS.ember : COLORS.ice,
+    content: `**${SIM_SHORT[sim]} results**`,
+    embeds: [{
+      title: batch.length === 1 ? clip(`P${batch[0]!.finish} · ${batch[0]!.championship ?? batch[0]!.track ?? 'Race'}`, 256) : `${batch.length} new results`,
       url: `${SITE_URL}/team/${sim}#results`,
-    })),
+      description: clip(
+        batch.map((r) => `${medal(r.finish)} **P${r.finish}** · ${[r.championship, r.track].filter(Boolean).join(' · ') || 'Race'}${r.car ? ` (${r.car})` : ''}`).join('\n'),
+        4000
+      ),
+      color: best <= 3 ? COLORS.ember : COLORS.ice,
+      image: { url: `${SITE_URL}/api/graphics/results?ids=${batch.map((r) => r.id).join(',')}` },
+      footer: { text: `PRISM · ${SIM_LABEL[sim]}` },
+    }],
   })
   if (!posted) return 0
-  await admin.from('results').update({ announced_at: new Date().toISOString() }).in('id', rows.slice(0, 10).map((r) => r.id))
-  return Math.min(rows.length, 10)
+  await admin.from('results').update({ announced_at: new Date().toISOString() }).in('id', batch.map((r) => r.id))
+  return batch.length
 }
 
 // Gives linked drivers the LMU / ACC driver role when they're on that main

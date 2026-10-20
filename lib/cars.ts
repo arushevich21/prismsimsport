@@ -1,7 +1,8 @@
 // Car makes and their logos, matched from the free-text car name in a race
-// lineup ("Isotta Fraschini TIPO 6 LMH" → Isotta Fraschini). Logos live in
-// public/cars/ (from filippofilip95/car-logos-dataset and Wikimedia Commons);
-// a make without one shows its name instead.
+// lineup ("Isotta Fraschini TIPO 6 LMH" → Isotta Fraschini). Logos come from
+// filippofilip95/car-logos-dataset and Wikimedia Commons, prepared for PRISM's
+// dark backgrounds in public/cars/on-dark/ (crests keep their colours,
+// everything else is white). A make without a logo shows its name instead.
 
 export type CarMake = {
   name: string
@@ -9,7 +10,7 @@ export type CarMake = {
   logo: { src: string; width: number; height: number } | null
 }
 
-const logo = (slug: string, width: number, height: number) => ({ src: `/cars/${slug}.png`, width, height })
+const logo = (slug: string, width: number, height: number) => ({ src: `/cars/on-dark/${slug}.png`, width, height })
 
 // First match wins, so more specific names come before broader ones.
 const MAKES: CarMake[] = [

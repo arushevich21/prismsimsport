@@ -86,6 +86,20 @@ export async function getLatestResults(limit = 3): Promise<Result[]> {
   return (data ?? []) as Result[]
 }
 
+// Specific results, in race order, for the results graphic.
+export async function getResultsByIds(ids: string[]): Promise<Result[]> {
+  const { data, error } = await createPublicClient()
+    .from('results')
+    .select('*')
+    .in('id', ids)
+    .order('raced_on', { ascending: true, nullsFirst: true })
+  if (error) {
+    console.error('[data] results by id:', error.message)
+    return []
+  }
+  return (data ?? []) as Result[]
+}
+
 export async function getMainLineup(sim: Sim): Promise<Driver[]> {
   const supabase = createPublicClient()
   const { data, error } = await supabase
