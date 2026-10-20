@@ -49,11 +49,13 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
   if ([improve, goals, experience, carSeries ?? ''].some((v) => v.length > MAX_ANSWER)) return fail('One of your answers is too long.')
 
   const admin = createAdminClient()
-  const { data: existing } = await admin.from('inquiries').select('id').eq('user_id', viewer.user.id).maybeSingle()
-  if (!existing) {
+  const { data: existing } = await admin.from('inquiries').select('id, status').eq('user_id', viewer.user.id).maybeSingle()
+  // One application per person. A pending one stays as it is; a declined one
+  // (or one from a student who was later removed) is reopened with the new
+  // answers, and gets a fresh Discord ticket.
+  if (existing?.status !== 'pending') {
     const discordHandle = displayName(viewer)
-    const { data: inserted, error } = await admin.from('inquiries').insert({
-      user_id: viewer.user.id,
+    const answers = {
       email: viewer.user.email ?? null,
       discord_handle: discordHandle,
       improve,
@@ -61,7 +63,15 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
       experience,
       car_series: carSeries,
       program,
-    }).select('id').single()
+    }
+    const { data: inserted, error } = existing
+      ? await admin
+          .from('inquiries')
+          .update({ ...answers, status: 'pending', decided_at: null, created_at: new Date().toISOString(), discord_channel_id: null })
+          .eq('id', existing.id)
+          .select('id')
+          .single()
+      : await admin.from('inquiries').insert({ user_id: viewer.user.id, ...answers }).select('id').single()
     if (error) return fail('Could not save your application. Please try again.')
     after(() =>
       notifyNewApplication({ inquiryId: inserted.id as string, applicantId: viewer.user.id, name: discordHandle }, [
