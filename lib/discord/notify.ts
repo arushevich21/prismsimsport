@@ -1,7 +1,10 @@
 import 'server-only'
 import { SITE_URL } from '@/lib/site'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { COLORS, botEnabled, clip, discordEnv, postToChannel, sendDM, setMemberRole, timestamp, type MessagePayload } from './api'
+import {
+  COLORS, botEnabled, clip, createPrivateChannel, discordEnv, makeReadOnlyFor, postToChannel, sendDM, setMemberRole, slugify, timestamp,
+  type MessagePayload,
+} from './api'
 import { postDiscordEmbed } from './webhook'
 
 // What the site tells Discord. With a bot token configured these become DMs,
@@ -65,14 +68,41 @@ export async function notifyStudentOfReply(studentId: string, coachName: string,
   })
 }
 
-export async function notifyNewApplication(name: string, fields: { name: string; value: string }[]) {
+// Opens a private ticket channel for the applicant and coaches, posts their
+// answers there, and remembers it on the application. Returns the channel ID.
+async function openApplicationTicket(inquiryId: string, applicantId: string, name: string, fields: { name: string; value: string }[]) {
+  if (!discordEnv.applicationsCategory) return null
+  const [discordId] = await discordIds([applicantId])
+  const channel = await createPrivateChannel(`application-${slugify(name)}`, {
+    parentId: discordEnv.applicationsCategory,
+    members: discordId ? [discordId] : [],
+    roles: [discordEnv.roles.coach].filter((id): id is string => !!id),
+    topic: `PRISM Academy application from ${name}`,
+  })
+  if (!channel) return null
+  await postToChannel(channel.id, {
+    content: discordId ? `<@${discordId}>, thanks for applying to PRISM Academy! A coach will review your application and reply here.` : `Application from **${clip(name, 200)}** (not in the server yet, so they can't see this channel).`,
+    embeds: [{ title: 'Your application', color: COLORS.ember, fields: fields.map((f) => ({ ...f, value: clip(f.value) })) }],
+    allowed_mentions: { users: discordId ? [discordId] : [] },
+  })
+  await createAdminClient().from('inquiries').update({ discord_channel_id: channel.id }).eq('id', inquiryId)
+  return channel.id
+}
+
+export async function notifyNewApplication(application: { inquiryId: string; applicantId: string; name: string }, fields: { name: string; value: string }[]) {
+  const { name } = application
   const review = `${SITE_URL}/coach?tab=applications`
-  if (botEnabled() && discordEnv.channels.staff) {
-    const posted = await postToChannel(discordEnv.channels.staff, {
-      embeds: [{ title: `New coaching application: ${clip(name, 200)}`, color: COLORS.ember, fields: fields.map((f) => ({ ...f, value: clip(f.value) })) }],
+  if (botEnabled()) {
+    const ticket = await openApplicationTicket(application.inquiryId, application.applicantId, name, fields)
+    const posted = discordEnv.channels.staff && await postToChannel(discordEnv.channels.staff, {
+      embeds: [{
+        title: `New coaching application: ${clip(name, 200)}`,
+        color: COLORS.ember,
+        fields: [...fields.map((f) => ({ ...f, value: clip(f.value) })), ...(ticket ? [{ name: 'Ticket', value: `<#${ticket}>` }] : [])],
+      }],
       components: [{ type: 1, components: [{ type: 2, style: 5, label: 'Review on PRISM', url: review }] }],
     })
-    if (posted) return
+    if (posted || ticket) return
   }
   await postDiscordEmbed(process.env.DISCORD_WEBHOOK_URL, {
     title: 'New coaching application',
@@ -122,9 +152,26 @@ export async function notifyBooking(coachId: string, who: string, minutes: numbe
   await postDiscordEmbed(process.env.DISCORD_QA_WEBHOOK_URL, { title: 'New coaching session booked', fields: [...fields, { name: 'Queue', value: queue }] })
 }
 
+// Posts the decision in the applicant's ticket and leaves it read-only for
+// them, so the history stays but the conversation moves on.
+async function closeApplicationTicket(applicantId: string, discordId: string | undefined, message: string) {
+  const { data } = await createAdminClient().from('inquiries').select('discord_channel_id').eq('user_id', applicantId).maybeSingle()
+  const channel = data?.discord_channel_id as string | null | undefined
+  if (!channel) return
+  await postToChannel(channel, { content: discordId ? `<@${discordId}> ${message}` : message, allowed_mentions: { users: discordId ? [discordId] : [] } })
+  if (discordId) await makeReadOnlyFor(channel, discordId)
+}
+
+export async function onApplicationDeclined(applicantId: string) {
+  if (!botEnabled()) return
+  const [id] = await discordIds([applicantId])
+  await closeApplicationTicket(applicantId, id, 'Thanks for applying. We can’t offer you a spot in the academy right now, but you’re welcome to keep racing with the community and apply again later.')
+}
+
 export async function onStudentApproved(studentId: string, coachName: string | null) {
   if (!botEnabled()) return
   const [id] = await discordIds([studentId])
+  await closeApplicationTicket(studentId, id, `You’re in! Welcome to PRISM Academy${coachName ? `. Your coach is **${clip(coachName, 100)}**` : ''}. You now have the Academy role and access to the team chat.`)
   if (!id) return
   await setMemberRole(id, discordEnv.roles.academy, true)
   await sendDM(id, {

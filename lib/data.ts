@@ -8,8 +8,8 @@ import type { Driver, Race, RaceCar, Result, Sim } from '@/lib/types'
 
 const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
 
-// A race stays "next" until a few hours after green flag, so the card is
-// still up while it's running.
+// A race stays "next" until a few hours after its last timeslot starts, so
+// the card is still up while it's running.
 const RACE_GRACE_MS = 4 * 60 * 60 * 1000
 
 type RaceRow = Omit<Race, 'cars'> & {
@@ -38,10 +38,10 @@ export async function getNextRace(sim?: Sim): Promise<Race | null> {
   let query = supabase
     .from('races')
     .select(`id, sim, event_name, series, track, race_length, starts_at, stream_url,
-      race_cars ( id, car_name, class, sort_order,
+      race_cars ( id, car_name, class, sort_order, starts_at,
         race_car_drivers ( sort_order, drivers ( ${DRIVER_COLUMNS} ) ) )`)
     .eq('published', true)
-    .gte('starts_at', new Date(Date.now() - RACE_GRACE_MS).toISOString())
+    .gte('last_start_at', new Date(Date.now() - RACE_GRACE_MS).toISOString())
     .order('starts_at', { ascending: true })
     .limit(1)
   if (sim) query = query.eq('sim', sim)
@@ -52,6 +52,23 @@ export async function getNextRace(sim?: Sim): Promise<Race | null> {
     return null
   }
   return data?.[0] ? toRace(data[0] as unknown as RaceRow) : null
+}
+
+// One published race, for the lineup graphic.
+export async function getPublishedRace(id: string): Promise<Race | null> {
+  const { data, error } = await createPublicClient()
+    .from('races')
+    .select(`id, sim, event_name, series, track, race_length, starts_at, stream_url,
+      race_cars ( id, car_name, class, sort_order, starts_at,
+        race_car_drivers ( sort_order, drivers ( ${DRIVER_COLUMNS} ) ) )`)
+    .eq('id', id)
+    .eq('published', true)
+    .maybeSingle()
+  if (error) {
+    console.error('[data] race:', error.message)
+    return null
+  }
+  return data ? toRace(data as unknown as RaceRow) : null
 }
 
 export async function getLatestResults(limit = 3): Promise<Result[]> {

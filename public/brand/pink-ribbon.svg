@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 124" width="100" height="124" role="img" aria-label="Breast cancer awareness ribbon">
+  <!-- Back strand: the whole loop, then down to the left tail -->
+  <path d="M38 56 C26 36 30 10 50 10 C70 10 74 36 62 56 L28 116" fill="none" stroke="#e46a9b" stroke-width="15" />
+  <!-- Front strand: the loop's left side, crossing over to the right tail -->
+  <path d="M50 10 C30 10 26 36 38 56 L72 116" fill="none" stroke="#f39ac0" stroke-width="15" />
+</svg>
