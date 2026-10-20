@@ -7,7 +7,7 @@ import {
   CLASSES, dangerBtn, errorText, field, getCountryOptions, isoToLocalInput, label, localInputToIso, primaryBtn, smallBtn, uid,
 } from '@/lib/admin/shared'
 import { createClient } from '@/lib/supabase/client'
-import { SIM_SHORT, type Sim } from '@/lib/types'
+import { SIM_SHORT, lineupBadge, type Sim } from '@/lib/types'
 import { useRoster, type AdminDriver } from './useRoster'
 
 type RaceRow = {
@@ -223,7 +223,8 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
         {cars.map((car) => {
           const available = simDrivers.filter((d) => !car.driverIds.includes(d.id))
           const main = available.filter((d) => d.main_lineup.includes(sim))
-          const others = available.filter((d) => !d.main_lineup.includes(sim))
+          const academy = available.filter((d) => !d.main_lineup.includes(sim) && d.academy)
+          const others = available.filter((d) => !d.main_lineup.includes(sim) && !d.academy)
           return (
             <div key={car.key} className="flex flex-col gap-3 rounded-lg border border-line p-3 sm:p-4">
               <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
@@ -236,10 +237,11 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
               <ul className="flex flex-col">
                 {car.driverIds.map((id) => {
                   const d = byId.get(id)
+                  const badge = d && lineupBadge(d, sim)
                   return (
                     <li key={id} className="flex items-center gap-2 border-b border-mist py-2 last:border-0">
                       <span className="flex-1 font-medium">{d?.name ?? 'Unknown driver'}</span>
-                      {d && !d.main_lineup.includes(sim) && <span className="rounded border border-[#cbd1d9] px-1.5 text-[11px] font-semibold">GUEST</span>}
+                      {badge && <span className={`rounded border px-1.5 text-[11px] font-semibold ${badge === 'ACADEMY' ? 'border-iris-deep text-iris-deep' : 'border-[#cbd1d9]'}`}>{badge}</span>}
                       <button type="button" aria-label={`Remove ${d?.name ?? 'driver'}`} className={smallBtn} onClick={() => updateCar(car.key, { driverIds: car.driverIds.filter((x) => x !== id) })}>✕</button>
                     </li>
                   )
@@ -260,6 +262,11 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
                   <optgroup label={`${SIM_SHORT[sim]} main lineup`}>
                     {main.map((d) => <option key={d.id} value={d.id}>{d.name}{d.role_tag ? ` · ${d.role_tag}` : ''}</option>)}
                   </optgroup>
+                  {academy.length > 0 && (
+                    <optgroup label="Academy drivers">
+                      {academy.map((d) => <option key={d.id} value={d.id}>{d.name}{d.sims.includes(sim) ? '' : ` (not usually ${SIM_SHORT[sim]})`}</option>)}
+                    </optgroup>
+                  )}
                   <optgroup label="Reserves, guests and other drivers">
                     {others.map((d) => <option key={d.id} value={d.id}>{d.name}{d.sims.includes(sim) ? '' : ` (not usually ${SIM_SHORT[sim]})`}</option>)}
                   </optgroup>
@@ -307,6 +314,7 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
   const [nickname, setNickname] = useState('')
   const [country, setCountry] = useState('US')
   const [main, setMain] = useState(false)
+  const [academy, setAcademy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -315,8 +323,8 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
     setBusy(true)
     const { data, error } = await createClient()
       .from('drivers')
-      .insert({ name: name.trim(), nickname: nickname.trim() || null, country_code: country || null, sims: [sim], main_lineup: main ? [sim] : [] })
-      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, archived, sort_order, profile_id')
+      .insert({ name: name.trim(), nickname: nickname.trim() || null, country_code: country || null, sims: [sim], main_lineup: main ? [sim] : [], academy })
+      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on, archived, sort_order, profile_id')
       .single()
     setBusy(false)
     if (error) return setError(errorText(error))
@@ -339,6 +347,10 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
       <label className="flex min-h-11 items-center gap-2 text-sm">
         <input type="checkbox" checked={main} onChange={(e) => setMain(e.target.checked)} className="h-5 w-5" />
         Also add to the {SIM_SHORT[sim]} main lineup
+      </label>
+      <label className="flex min-h-11 items-center gap-2 text-sm">
+        <input type="checkbox" checked={academy} onChange={(e) => setAcademy(e.target.checked)} className="h-5 w-5" />
+        Academy driver (shown as ACADEMY instead of GUEST)
       </label>
       {error && <p className="text-sm text-[#8a1c1c]">{error}</p>}
       <div className="flex gap-2">

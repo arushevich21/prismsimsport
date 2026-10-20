@@ -1,12 +1,14 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
+import { getAcademyDrivers, getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
 import { Editable } from '@/components/admin/Editable'
 import { classChip } from '@/lib/site'
-import { SIM_SHORT, type Sim } from '@/lib/types'
+import { SIM_SHORT, lineupBadge, type Sim } from '@/lib/types'
 import { btn, eyebrow, h2 } from '@/lib/ui'
 import { Countdown, LocalTime } from './Countdown'
+import { AcademyDrivers } from './AcademyDrivers'
 import { DriverCard } from './DriverCard'
+import { DriverRanks } from './DriverRanks'
 import { Flag } from './Flag'
 import { ResultsList } from './ResultsList'
 
@@ -16,7 +18,7 @@ const TABS: { sim: Sim; label: string }[] = [
 ]
 
 export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; season?: number }) {
-  const [race, lineup, seasons] = await Promise.all([getNextRace(sim), getMainLineup(sim), getSeasons(sim)])
+  const [race, lineup, academy, seasons] = await Promise.all([getNextRace(sim), getMainLineup(sim), getAcademyDrivers(sim), getSeasons(sim)])
   const currentYear = new Date().getFullYear()
   const season = requestedSeason ?? seasons[0] ?? currentYear
   const seasonOptions = [...new Set([season, ...seasons])].sort((a, b) => b - a)
@@ -89,8 +91,11 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
                           {d.name}
                           {d.nickname && <span className="font-normal text-muted"> “{d.nickname}”</span>}
                         </span>
-                        {!d.main_lineup.includes(sim) && (
+                        {lineupBadge(d, sim) === 'GUEST' && (
                           <span className="rounded border border-[#cbd1d9] px-1.5 py-0.5 text-[11px] font-semibold tracking-wider text-[#4a4f57]">GUEST</span>
+                        )}
+                        {lineupBadge(d, sim) === 'ACADEMY' && (
+                          <span className="rounded bg-iris px-1.5 py-0.5 text-[11px] font-semibold tracking-wider text-ink">ACADEMY</span>
                         )}
                       </li>
                     ))}
@@ -117,6 +122,7 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
             )}
           </div>
           <Editable editor="roster" sim={sim}>
+          <div className="flex flex-col gap-10">
           {lineup.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
               {lineup.map((d) => <DriverCard key={d.id} driver={d} />)}
@@ -124,6 +130,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
           ) : (
             <p className="text-muted">The lineup is being finalised.</p>
           )}
+          {sim === 'lmu' && <DriverRanks drivers={lineup} />}
+          </div>
           </Editable>
 
           <aside aria-label="Driver academy" className="mt-4 flex flex-col gap-6 rounded-xl bg-graphite p-6 text-white sm:p-10 lg:flex-row lg:items-center lg:justify-between">
@@ -139,6 +147,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
               <Link href="/academy#coaches" className={btn.outlineDark}>Meet the coaches</Link>
             </div>
           </aside>
+
+          <AcademyDrivers sim={sim} drivers={academy} />
         </div>
       </section>
 
