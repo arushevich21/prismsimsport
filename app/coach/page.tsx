@@ -4,7 +4,7 @@ import { SessionCard } from '@/components/academy/SessionCard'
 import { DownloadButton, SubmitButton } from '@/components/academy/small'
 import { Card, PageTitle } from '@/components/academy/ui'
 import { approveApplication, declineApplication, reviewTelemetry } from '@/lib/academy/actions'
-import { TIERS, TIER_LABEL } from '@/lib/academy/constants'
+import { PROGRAMS, PROGRAM_SHORT, TIERS, TIER_LABEL } from '@/lib/academy/constants'
 import { getCoaches, getQueue, personName } from '@/lib/academy/queries'
 import { requireStaff } from '@/lib/auth'
 
@@ -61,6 +61,7 @@ export default async function CoachQueuePage({ searchParams }: { searchParams: P
           <Card key={a.id} title={a.discord_handle ?? 'New applicant'} action={<span className="text-sm text-muted">Applied {ago(a.created_at)}</span>}>
             <dl className="grid gap-4 text-[15px] md:grid-cols-2">
               {[
+                ['Program', a.program ? PROGRAM_SHORT[a.program] : 'Not asked (applied before programs)'],
                 ['Wants to improve', a.improve],
                 ['Goals', a.goals],
                 ['Experience', a.experience],
@@ -82,6 +83,11 @@ export default async function CoachQueuePage({ searchParams }: { searchParams: P
               <label className="flex flex-col gap-1 text-[13px] text-[#4a4f57]">Tier
                 <select name="tier" className={field} defaultValue="student">
                   {TIERS.map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
+                </select>
+              </label>
+              <label className="flex flex-col gap-1 text-[13px] text-[#4a4f57]">Program
+                <select name="program" className={field} defaultValue={a.program ?? 'lmu'}>
+                  {PROGRAMS.map((p) => <option key={p} value={p}>{PROGRAM_SHORT[p]}</option>)}
                 </select>
               </label>
               <SubmitButton className={primary}>Approve</SubmitButton>

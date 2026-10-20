@@ -3,7 +3,7 @@ import { cache } from 'react'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import type { Viewer } from '@/lib/auth'
-import type { Tier } from './constants'
+import type { Program, Tier } from './constants'
 
 // Reads for the Academy pages. They run as the signed-in user, so RLS limits
 // each query to what that person may see; the service role is only used where
@@ -54,7 +54,7 @@ export type TelemetryUpload = {
 
 export type Message = { id: string; student_id: string; sender_id: string; body: string; source: string; read_at: string | null; created_at: string }
 
-export type StudentRow = { profile_id: string; coach_id: string | null; tier: Tier; team_ready: boolean; approved_at: string; profile: Person | null }
+export type StudentRow = { profile_id: string; coach_id: string | null; tier: Tier; program: Program | null; team_ready: boolean; approved_at: string; profile: Person | null }
 
 async function getCoach(coachId: string): Promise<Coach | null> {
   const supabase = await createClient()
@@ -134,7 +134,7 @@ export async function getStudentsFor(viewer: Viewer): Promise<StudentRow[]> {
   const supabase = await createClient()
   let query = supabase
     .from('students')
-    .select(`profile_id, coach_id, tier, team_ready, approved_at, profile:profiles!students_profile_id_fkey ( ${PERSON} )`)
+    .select(`profile_id, coach_id, tier, program, team_ready, approved_at, profile:profiles!students_profile_id_fkey ( ${PERSON} )`)
     .order('approved_at', { ascending: false })
   if (viewer.role !== 'admin') query = query.eq('coach_id', viewer.user.id)
   const { data } = await query
@@ -150,6 +150,7 @@ export type Application = {
   goals: string
   experience: string
   car_series: string | null
+  program: Program | null
   status: string
   created_at: string
 }
