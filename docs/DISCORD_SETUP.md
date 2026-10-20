@@ -67,7 +67,7 @@ Any role or channel you leave out simply turns that feature off. Redeploy after 
 After the deploy with `DISCORD_PUBLIC_KEY` is live: **General Information → Interactions Endpoint URL** →
 
 ```
-https://prismsimsport.app/api/discord/interactions
+https://www.prismsimsport.app/api/discord/interactions
 ```
 
 Discord sends a test request when you save; it only saves if the site answers correctly.
