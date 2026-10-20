@@ -75,12 +75,13 @@ function CarCard({ car, race, origin, compact }: { car: RaceCar; race: Race; ori
         </div>
       )}
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        {make?.logo && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 52, padding: '6px 10px', background: C.white, borderRadius: 8 }}>
-            {/* eslint-disable-next-line @next/next/no-img-element -- rendered by next/og, not the browser */}
-            <img src={`${origin}${make.logo.src}`} alt="" height={40} width={Math.round((40 * make.logo.width) / make.logo.height)} style={{ maxWidth: 110, objectFit: 'contain' }} />
-          </div>
-        )}
+        {make?.logo && (() => {
+          // 48px tall, but wide wordmarks are capped at 140px wide.
+          const w = Math.min(140, Math.round((48 * make.logo.width) / make.logo.height))
+          const h = Math.round((w * make.logo.height) / make.logo.width)
+          // eslint-disable-next-line @next/next/no-img-element -- rendered by next/og, not the browser
+          return <img src={`${origin}${make.logo.src}`} alt="" width={w} height={h} />
+        })()}
         {cls && (
           <span style={{ background: CLASS_COLOR[cls.toLowerCase().replace(/\s+/g, '')] ?? '#e4e7ec', color: C.ink, borderRadius: 6, padding: '6px 12px', fontFamily: 'JetBrains Mono', fontWeight: 600, fontSize: 20, letterSpacing: 2 }}>
             {cls.toUpperCase()}
