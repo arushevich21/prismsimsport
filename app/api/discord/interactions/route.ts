@@ -1,6 +1,7 @@
 import { createPublicKey, verify } from 'node:crypto'
 import { revalidatePath } from 'next/cache'
 import { after, NextResponse } from 'next/server'
+import { PROGRAM_SHORT, type Program } from '@/lib/academy/constants'
 import { approveInquiry, declineInquiry } from '@/lib/academy/decisions'
 import { personName } from '@/lib/academy/queries'
 import { notifyCoachesOfMessage, notifyStudentOfReply } from '@/lib/discord/notify'
@@ -58,15 +59,16 @@ async function accountFor(interaction: Interaction) {
 // Approve / Decline on an application. Admins only, like the coach queue.
 // Approving makes the admin who clicked the student's coach (if they coach),
 // on the default tier; both can be changed on the site.
-async function decideApplication(interaction: Interaction, action: string, inquiryId: string) {
+async function decideApplication(interaction: Interaction, action: 'approve-lmu' | 'approve-acc' | 'approve-both' | 'decline', inquiryId: string) {
   const sender = await accountFor(interaction)
   if (!sender) return reply('Sign in to prismsimsport.app with this Discord account first.')
   if (sender.role !== 'admin') return reply('Only PRISM admins can approve or decline applications.')
 
   let result
-  if (action === 'approve') {
+  const program = action === 'decline' ? null : (action.slice('approve-'.length) as Program)
+  if (program) {
     const { data: coach } = await createAdminClient().from('coaches').select('profile_id').eq('profile_id', sender.id).maybeSingle()
-    result = await approveInquiry(inquiryId, coach ? sender.id : null, 'student')
+    result = await approveInquiry(inquiryId, coach ? sender.id : null, 'student', program)
   } else {
     result = await declineInquiry(inquiryId)
   }
@@ -80,8 +82,8 @@ async function decideApplication(interaction: Interaction, action: string, inqui
   return NextResponse.json({
     type: 7, // update the message the button was on
     data: {
-      content: action === 'approve'
-        ? `✅ Approved by ${who}. They get the Academy role and access to the team chat. Change their coach or tier on PRISM.`
+      content: program
+        ? `✅ Approved for ${PROGRAM_SHORT[program]} by ${who}. Their Discord roles are on the way. Change their coach, tier or program on PRISM.`
         : `❌ Declined by ${who}.`,
       components: [],
     },
@@ -98,8 +100,10 @@ export async function POST(request: Request) {
   if (interaction.type === PING) return NextResponse.json({ type: 1 })
 
   const customId = interaction.data?.custom_id ?? ''
-  const decision = /^app:(approve|decline):([\w-]{1,64})$/.exec(customId)
-  if (decision && interaction.type === MESSAGE_COMPONENT) return decideApplication(interaction, decision[1]!, decision[2]!)
+  const decision = /^app:(approve-lmu|approve-acc|approve-both|decline):([\w-]{1,64})$/.exec(customId)
+  if (decision && interaction.type === MESSAGE_COMPONENT) {
+    return decideApplication(interaction, decision[1] as 'approve-lmu' | 'approve-acc' | 'approve-both' | 'decline', decision[2]!)
+  }
 
   const studentId = customId.startsWith('reply:') ? customId.slice(6) : ''
   if (!UUID.test(studentId)) return reply('That button has expired.')

@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { SubmitButton, TeamReadyToggle } from '@/components/academy/small'
 import { Avatar, PageTitle, TierChip } from '@/components/academy/ui'
 import { removeStudent, updateStudent } from '@/lib/academy/actions'
-import { TIERS, TIER_LABEL } from '@/lib/academy/constants'
+import { PROGRAMS, PROGRAM_SHORT, TIERS, TIER_LABEL } from '@/lib/academy/constants'
 import { getCoaches, getQueue, personName } from '@/lib/academy/queries'
 import { requireStaff } from '@/lib/auth'
 
@@ -36,6 +36,7 @@ export default async function StudentsPage() {
                   <span className="font-semibold">{personName(s.profile)}</span>
                   <span className="text-sm text-muted">
                     Since {new Date(s.approved_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                    {` · ${s.program ? PROGRAM_SHORT[s.program] : 'No program set'}`}
                     {admin && ` · ${s.coach_id ? coachName.get(s.coach_id) ?? 'Coach' : 'No coach'}`}
                   </span>
                 </div>
@@ -47,7 +48,7 @@ export default async function StudentsPage() {
               </div>
               {admin && (
                 <details className="rounded-lg bg-mist p-3">
-                  <summary className="tap flex cursor-pointer items-center text-sm font-semibold">Change coach, tier or remove</summary>
+                  <summary className="tap flex cursor-pointer items-center text-sm font-semibold">Change coach, tier, program or remove</summary>
                   <form action={updateStudent} className="mt-3 flex flex-wrap items-end gap-2">
                     <input type="hidden" name="profile_id" value={s.profile_id} />
                     <label className="flex flex-col gap-1 text-[13px] text-[#4a4f57]">Coach
@@ -59,6 +60,12 @@ export default async function StudentsPage() {
                     <label className="flex flex-col gap-1 text-[13px] text-[#4a4f57]">Tier
                       <select name="tier" defaultValue={s.tier} className={field}>
                         {TIERS.map((t) => <option key={t} value={t}>{TIER_LABEL[t]}</option>)}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-1 text-[13px] text-[#4a4f57]">Program
+                      <select name="program" defaultValue={s.program ?? ''} className={field}>
+                        <option value="">Not set</option>
+                        {PROGRAMS.map((p) => <option key={p} value={p}>{PROGRAM_SHORT[p]}</option>)}
                       </select>
                     </label>
                     <SubmitButton className="tap rounded-md bg-ink px-4 text-sm font-semibold text-white">Save</SubmitButton>

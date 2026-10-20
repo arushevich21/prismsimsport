@@ -1,4 +1,5 @@
 import 'server-only'
+import { PROGRAM_SHORT, type Program } from '@/lib/academy/constants'
 import { SITE_URL } from '@/lib/site'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
@@ -68,18 +69,32 @@ export async function notifyStudentOfReply(studentId: string, coachName: string,
   })
 }
 
-// Approve / Decline buttons for an application, handled by
+// Approve (for a program) / Decline buttons for an application, handled by
 // /api/discord/interactions (admins only), plus a link to the site's queue.
 export const applicationButtons = (inquiryId: string): MessagePayload['components'] => [
   {
     type: 1,
     components: [
-      { type: 2, style: 3, label: 'Approve', custom_id: `app:approve:${inquiryId}` },
+      { type: 2, style: 3, label: 'Approve for LMU', custom_id: `app:approve-lmu:${inquiryId}` },
+      { type: 2, style: 3, label: 'Approve for ACC', custom_id: `app:approve-acc:${inquiryId}` },
+      { type: 2, style: 1, label: 'Approve for both', custom_id: `app:approve-both:${inquiryId}` },
       { type: 2, style: 4, label: 'Decline', custom_id: `app:decline:${inquiryId}` },
       { type: 2, style: 5, label: 'Review on PRISM', url: `${SITE_URL}/coach?tab=applications` },
     ],
   },
 ]
+
+// LMU Academy / ACC Academy roles to match a student's program (none = neither).
+async function setProgramRoles(discordId: string, program: Program | null) {
+  await setMemberRole(discordId, discordEnv.roles.academyLmu, program === 'lmu' || program === 'both')
+  await setMemberRole(discordId, discordEnv.roles.academyAcc, program === 'acc' || program === 'both')
+}
+
+const PROGRAM_ACCESS: Record<Program, string> = {
+  lmu: 'the LMU Academy role and access to the team chat',
+  acc: 'the ACC Academy role and access to the ACC / Falcon channel',
+  both: 'the LMU and ACC Academy roles, with access to the team chat and the ACC / Falcon channel',
+}
 
 // Opens a private ticket channel for the applicant and coaches, posts their
 // answers there, and remembers it on the application. Returns the channel ID.
@@ -182,12 +197,17 @@ export async function onApplicationDeclined(applicantId: string) {
   await closeApplicationTicket(applicantId, id, 'Thanks for applying. We can’t offer you a spot in the academy right now, but you’re welcome to keep racing with the community and apply again later.')
 }
 
-export async function onStudentApproved(studentId: string, coachName: string | null) {
+export async function onStudentApproved(studentId: string, coachName: string | null, program: Program) {
   if (!botEnabled()) return
   const [id] = await discordIds([studentId])
-  await closeApplicationTicket(studentId, id, `You’re in! Welcome to PRISM Academy${coachName ? `. Your coach is **${clip(coachName, 100)}**` : ''}. You now have the Academy role and access to the team chat.`)
+  await closeApplicationTicket(
+    studentId,
+    id,
+    `You’re in! Welcome to PRISM Academy (${PROGRAM_SHORT[program]})${coachName ? `. Your coach is **${clip(coachName, 100)}**` : ''}. You now have ${PROGRAM_ACCESS[program]}.`
+  )
   if (!id) return
   await setMemberRole(id, discordEnv.roles.academy, true)
+  await setProgramRoles(id, program)
   await sendDM(id, {
     embeds: [{
       title: 'Welcome to PRISM Academy',
@@ -201,7 +221,16 @@ export async function onStudentApproved(studentId: string, coachName: string | n
 export async function onStudentRemoved(studentId: string) {
   if (!botEnabled()) return
   const [id] = await discordIds([studentId])
-  if (id) await setMemberRole(id, discordEnv.roles.academy, false)
+  if (!id) return
+  await setMemberRole(id, discordEnv.roles.academy, false)
+  await setProgramRoles(id, null)
+}
+
+// An admin changed which program a student is in.
+export async function onStudentProgramChanged(studentId: string, program: Program | null) {
+  if (!botEnabled()) return
+  const [id] = await discordIds([studentId])
+  if (id) await setProgramRoles(id, program)
 }
 
 export async function onCoachAdded(profileId: string) {

@@ -21,6 +21,17 @@ export type Tier = (typeof TIERS)[number]
 
 export const TIER_LABEL: Record<Tier, string> = { student: 'Student', driver: 'Driver', elite: 'Elite' }
 
+// Who an academy student races for. Coaching is PRISM's either way.
+export const PROGRAMS = ['lmu', 'acc', 'both'] as const
+export type Program = (typeof PROGRAMS)[number]
+export const PROGRAM_LABEL: Record<Program, string> = {
+  lmu: 'LMU: race under the PRISM banner',
+  acc: 'ACC: race with Falcon Motorsport',
+  both: 'Both',
+}
+export const PROGRAM_SHORT: Record<Program, string> = { lmu: 'LMU', acc: 'ACC · Falcon', both: 'LMU + ACC' }
+export const isProgram = (v: string): v is Program => (PROGRAMS as readonly string[]).includes(v)
+
 // Telemetry and replay files students can send. Sizes are checked in the browser too.
 export const TELEMETRY_EXTENSIONS = ['.rpy', '.ld', '.ldx', '.duckdb', '.csv', '.json', '.zip']
 export const TELEMETRY_MAX_BYTES = 100 * 1024 * 1024

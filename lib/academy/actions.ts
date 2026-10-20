@@ -6,11 +6,11 @@ import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
 import {
   notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
-  onCoachAdded, onStudentRemoved,
+  onCoachAdded, onStudentProgramChanged, onStudentRemoved,
 } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { TELEMETRY_EXTENSIONS, TIERS, type Tier } from './constants'
+import { PROGRAM_LABEL, TELEMETRY_EXTENSIONS, TIERS, isProgram, type Tier } from './constants'
 import { approveInquiry, declineInquiry } from './decisions'
 
 // Every action re-checks who is calling. RLS is the backstop for the ones that
@@ -43,6 +43,8 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
   const goals = str(fd, 'goals')
   const experience = str(fd, 'experience')
   const carSeries = str(fd, 'car_series') || null
+  const program = str(fd, 'program')
+  if (!isProgram(program)) return fail('Please choose a program: LMU, ACC or both.')
   if (!improve || !goals || !experience) return fail('Please answer the first three questions.')
   if ([improve, goals, experience, carSeries ?? ''].some((v) => v.length > MAX_ANSWER)) return fail('One of your answers is too long.')
 
@@ -58,10 +60,12 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
       goals,
       experience,
       car_series: carSeries,
+      program,
     }).select('id').single()
     if (error) return fail('Could not save your application. Please try again.')
     after(() =>
       notifyNewApplication({ inquiryId: inserted.id as string, applicantId: viewer.user.id, name: discordHandle }, [
+        { name: 'Program', value: PROGRAM_LABEL[program] },
         { name: 'What to improve', value: improve },
         { name: 'Goals', value: goals },
         { name: 'Experience', value: experience },
@@ -76,8 +80,9 @@ export async function approveApplication(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
   const tier = str(fd, 'tier') as Tier
-  if (!TIERS.includes(tier)) return
-  await approveInquiry(str(fd, 'id'), str(fd, 'coach_id') || null, tier)
+  const program = str(fd, 'program')
+  if (!TIERS.includes(tier) || !isProgram(program)) return
+  await approveInquiry(str(fd, 'id'), str(fd, 'coach_id') || null, tier, program)
   revalidatePath('/coach', 'layout')
 }
 
@@ -94,11 +99,15 @@ export async function updateStudent(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
   const tier = str(fd, 'tier') as Tier
+  const programValue = str(fd, 'program')
+  const program = isProgram(programValue) ? programValue : null
   if (!TIERS.includes(tier)) return
-  await createAdminClient()
-    .from('students')
-    .update({ tier, coach_id: str(fd, 'coach_id') || null })
-    .eq('profile_id', str(fd, 'profile_id'))
+  const profileId = str(fd, 'profile_id')
+  const admin = createAdminClient()
+  const { data: before } = await admin.from('students').select('program').eq('profile_id', profileId).maybeSingle()
+  await admin.from('students').update({ tier, coach_id: str(fd, 'coach_id') || null, program }).eq('profile_id', profileId)
+  // A new program means different Discord roles (LMU Academy / ACC Academy).
+  if (before && before.program !== program) after(() => onStudentProgramChanged(profileId, program))
   revalidatePath('/coach', 'layout')
 }
 

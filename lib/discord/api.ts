@@ -10,7 +10,9 @@ export const discordEnv = {
   token: process.env.DISCORD_BOT_TOKEN,
   guildId: process.env.DISCORD_GUILD_ID,
   roles: {
-    academy: process.env.DISCORD_ROLE_ACADEMY,
+    academy: process.env.DISCORD_ROLE_ACADEMY, // every academy student
+    academyLmu: process.env.DISCORD_ROLE_ACADEMY_LMU, // races for PRISM in LMU
+    academyAcc: process.env.DISCORD_ROLE_ACADEMY_ACC, // races with Falcon in ACC
     coach: process.env.DISCORD_ROLE_COACH,
     lmu: process.env.DISCORD_ROLE_LMU_DRIVER,
     acc: process.env.DISCORD_ROLE_ACC_DRIVER,
