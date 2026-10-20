@@ -1,11 +1,7 @@
 // Helpers shared by the in-page admin editors (client side).
 import { countries } from 'country-flag-icons'
-import type { Sim } from '@/lib/types'
 
-export const CLASSES: Record<Sim, string[]> = {
-  lmu: ['Hypercar', 'LMP2', 'LMP3', 'LMGT3'],
-  acc: ['GT3', 'GT4'],
-}
+export { CLASSES } from '@/lib/types'
 
 let countryOptions: { code: string; name: string }[] | null = null
 

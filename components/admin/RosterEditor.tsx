@@ -6,7 +6,7 @@ import { refreshPublicPages, syncRoles } from '@/lib/admin/actions'
 import { dangerBtn, errorText, field, getCountryOptions, label, primaryBtn, resizeImage, smallBtn, uid } from '@/lib/admin/shared'
 import { driverPhotoUrl } from '@/lib/photos'
 import { createClient } from '@/lib/supabase/client'
-import { SIMS, SIM_SHORT, type Sim } from '@/lib/types'
+import { CLASSES, DR_TIERS, SIMS, SIM_SHORT, type DriverRankTier, type Sim } from '@/lib/types'
 import { useRoster, type AdminDriver } from './useRoster'
 
 type Filter = Sim | 'all' | 'archived'
@@ -18,6 +18,11 @@ const editable = (d: AdminDriver) => ({
   role_tag: d.role_tag,
   sims: d.sims,
   main_lineup: d.main_lineup.filter((s) => d.sims.includes(s)),
+  academy: d.academy,
+  academy_class: d.academy ? d.academy_class : null,
+  lmu_dr_tier: d.lmu_dr_tier,
+  lmu_dr_level: d.lmu_dr_tier ? d.lmu_dr_level : null,
+  lmu_dr_updated_on: d.lmu_dr_updated_on,
   sort_order: d.sort_order,
   archived: d.archived,
   profile_id: d.profile_id,
@@ -55,6 +60,10 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
     setDrivers((ds) => ds.map((d) => (d.id === id ? { ...d, ...p } : d)))
     setDirty((s) => new Set(s).add(id))
   }
+  const today = () => new Date().toLocaleDateString('en-CA')
+  // Picking a rank stamps today's date so the site can say how fresh it is.
+  const setRank = (id: string, tier: DriverRankTier | null, level: number | null) =>
+    patch(id, { lmu_dr_tier: tier, lmu_dr_level: tier ? level : null, lmu_dr_updated_on: tier ? today() : null })
   const toggle = (list: Sim[], s: Sim, on: boolean) => (on ? [...new Set([...list, s])] : list.filter((x) => x !== s))
 
   const shown = drivers.filter((d) =>
@@ -64,7 +73,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   function addDriver() {
     const id = `new-${uid()}`
     setDrivers((ds) => [
-      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, archived: false, sort_order: 99, profile_id: null },
+      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null },
       ...ds,
     ])
     setDirty((s) => new Set(s).add(id))
@@ -224,6 +233,34 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                   </div>
                 ))}
               </fieldset>
+              <label className="flex min-h-10 items-center gap-2 text-sm">
+                <input type="checkbox" className="h-5 w-5" checked={d.academy} onChange={(e) => patch(d.id, { academy: e.target.checked })} />
+                Academy driver <span className="text-muted">(ACADEMY instead of GUEST in race lineups)</span>
+              </label>
+              {d.academy && (
+                <label className={label}>Academy class
+                  <select className={field} value={d.academy_class ?? ''} onChange={(e) => patch(d.id, { academy_class: e.target.value || null })}>
+                    <option value="">Not set</option>
+                    {[...new Set(d.sims.flatMap((s) => CLASSES[s]))].map((c) => <option key={c}>{c}</option>)}
+                  </select>
+                </label>
+              )}
+              {d.sims.includes('lmu') && (
+                <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2">
+                  <label className={label}>LMU Driver Rank
+                    <select className={field} value={d.lmu_dr_tier ?? ''} onChange={(e) => setRank(d.id, (e.target.value || null) as DriverRankTier | null, d.lmu_dr_level ?? 1)}>
+                      <option value="">Not set</option>
+                      {DR_TIERS.map((t) => <option key={t} value={t}>{t[0]!.toUpperCase() + t.slice(1)}</option>)}
+                    </select>
+                  </label>
+                  <label className={label}>Level
+                    <select className={field} disabled={!d.lmu_dr_tier} value={d.lmu_dr_level ?? ''} onChange={(e) => setRank(d.id, d.lmu_dr_tier, Number(e.target.value))}>
+                      {[1, 2, 3].map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </label>
+                  {d.lmu_dr_updated_on && <p className="col-span-2 text-[13px] text-muted">Updated {d.lmu_dr_updated_on}</p>}
+                </div>
+              )}
               <div className="flex flex-wrap items-end gap-2 border-t border-mist pt-3">
                 <label className={`${label} w-24`}>Order<input className={field} type="number" value={d.sort_order} onChange={(e) => patch(d.id, { sort_order: Number(e.target.value) || 0 })} /></label>
                 <label className="flex min-h-11 items-center gap-2 text-sm">

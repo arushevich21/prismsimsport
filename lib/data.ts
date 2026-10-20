@@ -6,7 +6,7 @@ import type { Driver, Race, RaceCar, Result, Sim } from '@/lib/types'
 // Public data for the marketing pages. Every function returns an empty value
 // on failure, so a database hiccup degrades a section instead of the page.
 
-const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path'
+const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
 
 // A race stays "next" until a few hours after green flag, so the card is
 // still up while it's running.
@@ -79,6 +79,25 @@ export async function getMainLineup(sim: Sim): Promise<Driver[]> {
     .order('sort_order')
   if (error) {
     console.error('[data] lineup:', error.message)
+    return []
+  }
+  return (data ?? []) as Driver[]
+}
+
+// Academy drivers who race in this sim, whether or not they've been in a lineup yet.
+export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
+  const supabase = createPublicClient()
+  const { data, error } = await supabase
+    .from('drivers')
+    .select(DRIVER_COLUMNS)
+    .eq('academy', true)
+    .contains('sims', [sim])
+    .not('main_lineup', 'cs', `{${sim}}`)
+    .eq('archived', false)
+    .order('sort_order')
+    .order('name')
+  if (error) {
+    console.error('[data] academy drivers:', error.message)
     return []
   }
   return (data ?? []) as Driver[]

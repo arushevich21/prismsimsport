@@ -1,7 +1,7 @@
 import 'server-only'
 import { SITE_URL } from '@/lib/site'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { SIM_LABEL, SIM_SHORT, type Sim } from '@/lib/types'
+import { SIM_LABEL, SIM_SHORT, lineupBadge, type Sim } from '@/lib/types'
 import {
   COLORS, botEnabled, clip, deleteChannelMessage, deleteScheduledEvent, discordEnv, editChannelMessage, flagEmoji,
   postToChannel, setMemberRole, timestamp, upsertScheduledEvent, type MessagePayload,
@@ -25,7 +25,7 @@ type RaceRow = {
     car_name: string | null
     class: string | null
     sort_order: number
-    race_car_drivers: { sort_order: number; drivers: { name: string; nickname: string | null; country_code: string | null; profile_id: string | null; main_lineup: Sim[] } | null }[]
+    race_car_drivers: { sort_order: number; drivers: { name: string; nickname: string | null; country_code: string | null; profile_id: string | null; main_lineup: Sim[]; academy: boolean } | null }[]
   }[]
 }
 
@@ -42,7 +42,7 @@ async function loadRace(raceId: string): Promise<RaceRow | null> {
   const { data } = await createAdminClient()
     .from('races')
     .select(`id, sim, event_name, series, track, race_length, starts_at, stream_url, published, discord_message_id, discord_event_id,
-      race_cars ( car_name, class, sort_order, race_car_drivers ( sort_order, drivers ( name, nickname, country_code, profile_id, main_lineup ) ) )`)
+      race_cars ( car_name, class, sort_order, race_car_drivers ( sort_order, drivers ( name, nickname, country_code, profile_id, main_lineup, academy ) ) )`)
     .eq('id', raceId)
     .maybeSingle()
   return data as unknown as RaceRow | null
@@ -65,8 +65,9 @@ async function lineupMessage(race: RaceRow): Promise<MessagePayload> {
         .map((d) => {
           const discordId = d.profile_id ? discordOf.get(d.profile_id) : null
           if (discordId) mentioned.push(discordId)
-          const guest = d.main_lineup.includes(race.sim) ? '' : ' *(guest)*'
-          return `${flagEmoji(d.country_code)} ${discordId ? `<@${discordId}>` : d.name}${guest}`.trim()
+          const badge = lineupBadge(d, race.sim)
+          const tag = badge ? ` *(${badge.toLowerCase()})*` : ''
+          return `${flagEmoji(d.country_code)} ${discordId ? `<@${discordId}>` : d.name}${tag}`.trim()
         })
       return {
         name: clip([car.car_name ?? 'Car', car.class?.toUpperCase()].filter(Boolean).join(' · '), 256),
