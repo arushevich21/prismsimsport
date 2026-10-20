@@ -2,7 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { getViewer } from '@/lib/auth'
-import { announceNewResults, removeRace, syncDriverRoles, syncRace } from '@/lib/discord/team'
+import { botEnabled, listTextChannels } from '@/lib/discord/api'
+import { announceNewResults, removeRace, syncDriverRoles, syncRace, type RaceSyncReport } from '@/lib/discord/team'
 import type { Sim } from '@/lib/types'
 
 // Called after an admin saves something in edit mode. The writes themselves go
@@ -21,9 +22,15 @@ async function isAdmin() {
   return (await getViewer())?.role === 'admin'
 }
 
-export async function syncRaceToDiscord(raceId: string) {
-  if (!(await isAdmin())) return
-  await syncRace(raceId)
+export async function syncRaceToDiscord(raceId: string): Promise<RaceSyncReport | null> {
+  if (!(await isAdmin())) return null
+  return syncRace(raceId)
+}
+
+// Text channels in the PRISM server, for picking a car's timeslot channel.
+export async function listDiscordChannels(): Promise<{ id: string; name: string }[]> {
+  if (!(await isAdmin()) || !botEnabled()) return []
+  return listTextChannels()
 }
 
 export async function removeRaceFromDiscord(raceId: string) {

@@ -1,5 +1,5 @@
 import { driverPhotoUrl } from '@/lib/photos'
-import type { Driver } from '@/lib/types'
+import type { Driver, DriverRankTier } from '@/lib/types'
 import { Flag, countryName } from './Flag'
 
 function initials(name: string) {
@@ -11,7 +11,30 @@ function initials(name: string) {
     .join('')
 }
 
-export function DriverCard({ driver }: { driver: Driver }) {
+// Our own tier colours; deliberately not LMU's badge artwork.
+const TIER_CHIP: Record<DriverRankTier, string> = {
+  bronze: 'bg-[#d9a57a]',
+  silver: 'bg-[#cfd4db]',
+  gold: 'bg-[#f0cd6b]',
+  platinum: 'bg-ice',
+}
+
+// LMU Driver Rank, entered by an admin from the driver's in-game profile.
+function RankChip({ driver }: { driver: Driver }) {
+  const tier = driver.lmu_dr_tier
+  if (!tier) return null
+  const updated = driver.lmu_dr_updated_on && new Date(`${driver.lmu_dr_updated_on}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+  return (
+    <span className="flex items-center gap-2 text-[13px] text-[#4a4f57] sm:text-sm" title={updated ? `LMU Driver Rank · updated ${updated}` : 'LMU Driver Rank'}>
+      <span className="font-mono text-[11px] font-semibold tracking-wider text-muted">DR</span>
+      <span className={`rounded px-2 py-0.5 font-mono text-[12px] font-semibold text-ink ${TIER_CHIP[tier]}`}>
+        {tier[0]!.toUpperCase() + tier.slice(1)} {driver.lmu_dr_level ?? ''}
+      </span>
+    </span>
+  )
+}
+
+export function DriverCard({ driver, showRank = false }: { driver: Driver; showRank?: boolean }) {
   const photo = driverPhotoUrl(driver.photo_path)
   return (
     <article className="flex flex-col overflow-hidden rounded-xl border border-line bg-white">
@@ -41,6 +64,7 @@ export function DriverCard({ driver }: { driver: Driver }) {
           <Flag code={driver.country_code} />
           <span>{countryName(driver.country_code) ?? 'Country not set'}</span>
         </div>
+        {showRank && <RankChip driver={driver} />}
       </div>
     </article>
   )

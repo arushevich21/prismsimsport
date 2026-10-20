@@ -21,6 +21,8 @@ export const discordEnv = {
     staff: process.env.DISCORD_CHANNEL_STAFF,
     captains: process.env.DISCORD_CHANNEL_CAPTAINS,
   },
+  // Category the bot creates a private ticket channel in for each applicant.
+  applicationsCategory: process.env.DISCORD_CATEGORY_APPLICATIONS,
 }
 
 export const botEnabled = () => !!discordEnv.token
@@ -32,6 +34,7 @@ export type Embed = {
   color?: number
   fields?: { name: string; value: string; inline?: boolean }[]
   footer?: { text: string }
+  image?: { url: string }
   timestamp?: string
 }
 
@@ -144,6 +147,65 @@ export function deleteScheduledEvent(eventId: string) {
   if (!discordEnv.guildId) return Promise.resolve(null)
   return discord('DELETE', `/guilds/${discordEnv.guildId}/scheduled-events/${eventId}`)
 }
+
+// ── Channels ────────────────────────────────────────────────────────────────
+
+export const PERMS = {
+  view: 1n << 10n,
+  send: 1n << 11n,
+  embed: 1n << 14n,
+  attach: 1n << 15n,
+  history: 1n << 16n,
+}
+const bits = (...p: bigint[]) => p.reduce((a, b) => a | b, 0n).toString()
+
+// Text and announcement channels, for the race editor's channel picker.
+export async function listTextChannels() {
+  if (!discordEnv.guildId) return []
+  const channels = await discord<{ id: string; name: string; type: number; position: number; parent_id: string | null }[]>('GET', `/guilds/${discordEnv.guildId}/channels`)
+  return (channels ?? []).filter((c) => c.type === 0 || c.type === 5).sort((a, b) => a.position - b.position).map((c) => ({ id: c.id, name: c.name }))
+}
+
+let botUserId: string | null = null
+async function botId() {
+  botUserId ??= (await discord<{ id: string }>('GET', '/users/@me'))?.id ?? null
+  return botUserId
+}
+
+// A private channel: hidden from @everyone, visible to the bot, the given
+// members (who can talk) and the given roles (staff).
+export async function createPrivateChannel(name: string, opts: { parentId?: string; members: string[]; roles: string[]; topic?: string }) {
+  if (!discordEnv.guildId) return null
+  const me = await botId()
+  const talk = bits(PERMS.view, PERMS.send, PERMS.embed, PERMS.attach, PERMS.history)
+  const overwrites = [
+    { id: discordEnv.guildId, type: 0, deny: bits(PERMS.view), allow: '0' },
+    ...(me ? [{ id: me, type: 1, allow: talk, deny: '0' }] : []),
+    ...opts.roles.map((id) => ({ id, type: 0, allow: talk, deny: '0' })),
+    ...opts.members.map((id) => ({ id, type: 1, allow: talk, deny: '0' })),
+  ]
+  const body = { name: clip(name, 100), type: 0, parent_id: opts.parentId, topic: opts.topic ? clip(opts.topic, 1024) : undefined }
+  // An overwrite for someone who isn't in the server fails the whole request,
+  // so retry without the members (staff can add them once they join).
+  return (
+    (await discord<{ id: string }>('POST', `/guilds/${discordEnv.guildId}/channels`, { ...body, permission_overwrites: overwrites })) ??
+    (opts.members.length
+      ? await discord<{ id: string }>('POST', `/guilds/${discordEnv.guildId}/channels`, { ...body, permission_overwrites: overwrites.filter((o) => !opts.members.includes(o.id)) })
+      : null)
+  )
+}
+
+// Lets a member read a channel but no longer post in it.
+export function makeReadOnlyFor(channelId: string, memberId: string) {
+  return discord('PUT', `/channels/${channelId}/permissions/${memberId}`, {
+    type: 1,
+    allow: bits(PERMS.view, PERMS.history),
+    deny: bits(PERMS.send),
+  })
+}
+
+// "Jane Doe!" → "jane-doe", for channel names.
+export const slugify = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'applicant'
 
 // 'US' → 🇺🇸 (Discord renders flag emoji everywhere).
 export function flagEmoji(countryCode: string | null) {

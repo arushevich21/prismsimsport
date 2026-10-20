@@ -10,12 +10,13 @@ Until `DISCORD_BOT_TOKEN` is set, everything falls back to the old webhooks (`DI
 |---|---|
 | A student messages their coach | The coach gets a DM with **Reply** and **Open on PRISM** buttons. Reply opens a text box; the answer lands in the site chat. |
 | A coach replies (site or Discord) | The student gets a DM with the same buttons. |
-| Someone applies for coaching | Post in the staff channel with a **Review** link. |
+| Someone applies for coaching | A private ticket channel (`#application-<name>`) is opened for them and the coaches, with their answers. Also posted in the staff channel with a **Review** link. |
+| An application is declined | A note in their ticket, which becomes read-only for them. |
 | Telemetry upload / new Cal.com booking | DM to the student's coach. |
-| An application is approved | Student gets the **Academy** role and a welcome DM. Removed students lose the role. |
+| An application is approved | A note in their ticket (then read-only for them), the **Academy** role (which opens the team chat) and a welcome DM. Removed students lose the role. |
 | Someone is made a coach | **Coach** role. |
 | A coach flags a student team-ready | Post in the captains channel. |
-| A race is saved in edit mode | Lineup posted (then edited in place) in the lineups channel, linked drivers mentioned, plus a Discord **scheduled event** at green flag. Unpublishing or deleting removes both. |
+| A race is saved in edit mode | Lineup posted (then edited in place) in the lineups channel with the 9:16 lineup graphic, linked drivers mentioned, plus one Discord **scheduled event** per timeslot. A car can also have its lineup posted in its own channel (e.g. `#friday-lm24`), picked in the race editor. Unpublishing or deleting removes all of it. The editor says exactly what was posted and what's missing. |
 | Results are saved | New results posted once in the results channel (tick box in the editor). |
 | The roster is saved | Linked drivers get or lose the **LMU Driver** / **ACC Driver** role to match the main lineups. Link a driver to their account in the roster editor. |
 | Someone signs in (optional) | Added to the server automatically (`NEXT_PUBLIC_DISCORD_AUTO_JOIN=true`). |
@@ -32,10 +33,12 @@ Until `DISCORD_BOT_TOKEN` is set, everything falls back to the old webhooks (`DI
 Open this link with your Application ID filled in:
 
 ```
-https://discord.com/oauth2/authorize?client_id=APPLICATION_ID&scope=bot&permissions=17601044499456
+https://discord.com/oauth2/authorize?client_id=APPLICATION_ID&scope=bot&permissions=17601044532240
 ```
 
-That grants only: View Channels, Send Messages, Embed Links, Read Message History, Manage Roles, Create Events, Manage Events.
+That grants only: View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Manage Channels (for application tickets), Manage Roles, Create Events, Manage Events.
+
+**Already invited the bot with the older link?** Open the link above again and authorize; Discord updates the bot's permissions in place. (Or give the bot's role **Manage Channels** and **Attach Files** in Server Settings → Roles.)
 
 Then in **Server Settings → Roles**, drag the bot's role **above** Academy, Coach, LMU Driver and ACC Driver. Discord only lets a bot hand out roles below its own.
 
@@ -58,6 +61,8 @@ Turn on **User Settings → Advanced → Developer Mode**, then right-click → 
 | `DISCORD_CHANNEL_RESULTS` | Channel for results |
 | `DISCORD_CHANNEL_STAFF` | Private coaches/admin channel (applications) |
 | `DISCORD_CHANNEL_CAPTAINS` | Private captains channel (team-ready students) |
+| `DISCORD_CATEGORY_APPLICATIONS` | Category the bot opens application tickets in (right-click the category → Copy ID). Make it hidden from `@everyone`. |
+| `TEAM_TIMEZONE` | Timezone printed on lineup graphics, e.g. `America/New_York` (the default) |
 | `NEXT_PUBLIC_DISCORD_AUTO_JOIN` | `true` to add people to the server when they sign in (Discord shows them an extra "join servers for you" permission) |
 
 Any role or channel you leave out simply turns that feature off. Redeploy after adding them.

@@ -50,6 +50,8 @@ export type RaceCar = {
   car_name: string | null
   class: string | null
   sort_order: number
+  // This car's timeslot; null means the race's green flag.
+  starts_at: string | null
   drivers: Driver[]
 }
 
@@ -63,6 +65,16 @@ export type Race = {
   starts_at: string | null
   stream_url: string | null
   cars: RaceCar[]
+}
+
+// When a car starts: its own timeslot, or the race's green flag.
+export const carStart = (car: { starts_at: string | null }, race: { starts_at: string | null }) => car.starts_at ?? race.starts_at
+
+// Every distinct start time in a race, earliest first.
+export function raceSlots(race: { starts_at: string | null; cars: { starts_at: string | null }[] }): string[] {
+  const times = race.cars.length ? race.cars.map((c) => carStart(c, race)) : [race.starts_at]
+  const byMs = new Map(times.filter((t): t is string => !!t).map((t) => [Date.parse(t), t]))
+  return [...byMs.entries()].sort((a, b) => a[0] - b[0]).map(([, t]) => t)
 }
 
 export type Result = {

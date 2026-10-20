@@ -6,7 +6,7 @@ import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
 import {
   notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
-  onCoachAdded, onStudentApproved, onStudentRemoved,
+  onApplicationDeclined, onCoachAdded, onStudentApproved, onStudentRemoved,
 } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -49,7 +49,7 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
   const { data: existing } = await admin.from('inquiries').select('id').eq('user_id', viewer.user.id).maybeSingle()
   if (!existing) {
     const discordHandle = displayName(viewer)
-    const { error } = await admin.from('inquiries').insert({
+    const { data: inserted, error } = await admin.from('inquiries').insert({
       user_id: viewer.user.id,
       email: viewer.user.email ?? null,
       discord_handle: discordHandle,
@@ -57,10 +57,10 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
       goals,
       experience,
       car_series: carSeries,
-    })
+    }).select('id').single()
     if (error) return fail('Could not save your application. Please try again.')
     after(() =>
-      notifyNewApplication(discordHandle, [
+      notifyNewApplication({ inquiryId: inserted.id as string, applicantId: viewer.user.id, name: discordHandle }, [
         { name: 'What to improve', value: improve },
         { name: 'Goals', value: goals },
         { name: 'Experience', value: experience },
@@ -99,10 +99,13 @@ export async function approveApplication(fd: FormData): Promise<void> {
 export async function declineApplication(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
-  await createAdminClient()
+  const { data } = await createAdminClient()
     .from('inquiries')
     .update({ status: 'declined', decided_at: new Date().toISOString() })
     .eq('id', str(fd, 'id'))
+    .select('user_id')
+    .maybeSingle()
+  if (data?.user_id) after(() => onApplicationDeclined(data.user_id as string))
   revalidatePath('/coach', 'layout')
 }
 
