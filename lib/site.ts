@@ -25,6 +25,7 @@ export type Sponsor = {
   url: string | null
   // White/light logo for dark backgrounds. Null shows the name as text until a logo is added.
   logo: { src: string; width: number; height: number } | null
+  blurb?: string
 }
 
 export const TITLE_SPONSOR = {
@@ -37,7 +38,12 @@ export const TITLE_SPONSOR = {
 // Car sponsors (Sacred Coffee, Falcon Motorsport, the pink ribbon) appear on
 // the liveries, not here.
 export const SUPPORTERS: Sponsor[] = [
-  { name: 'Cube Controls', url: PARTNERS.cube.url, logo: { src: '/brand/cube-controls-white.png', width: 1137, height: 290 } },
+  {
+    name: 'Cube Controls',
+    url: PARTNERS.cube.url,
+    logo: { src: '/brand/cube-controls-white.png', width: 1137, height: 290 },
+    blurb: 'Redefining the sim racing experience, offering high-quality products for the most demanding virtual drivers.',
+  },
 ]
 
 // Class colour chips. Light fills with dark text, so they pass contrast.
