@@ -39,7 +39,7 @@ export type Embed = {
 }
 
 export type Button =
-  | { type: 2; style: 1 | 2; label: string; custom_id: string }
+  | { type: 2; style: 1 | 2 | 3 | 4; label: string; custom_id: string } // primary, secondary, success, danger
   | { type: 2; style: 5; label: string; url: string }
 
 export type MessagePayload = {

@@ -11,6 +11,7 @@ Until `DISCORD_BOT_TOKEN` is set, everything falls back to the old webhooks (`DI
 | A student messages their coach | The coach gets a DM with **Reply** and **Open on PRISM** buttons. Reply opens a text box; the answer lands in the site chat. |
 | A coach replies (site or Discord) | The student gets a DM with the same buttons. |
 | Someone applies for coaching | A private ticket channel (`#application-<name>`) is opened for them and the coaches, with their answers. Also posted in the staff channel with a **Review** link. |
+| An admin clicks **Approve** / **Decline** on an application (in the ticket or the staff channel) | Same as approving or declining in the coach queue. Approving makes the admin who clicked the student's coach, on the default tier. Admins only; the buttons are replaced with who decided. |
 | An application is declined | A note in their ticket, which becomes read-only for them. |
 | Telemetry upload / new Cal.com booking | DM to the student's coach. |
 | An application is approved | A note in their ticket (then read-only for them), the **Academy** role (which opens the team chat) and a welcome DM. Removed students lose the role. |

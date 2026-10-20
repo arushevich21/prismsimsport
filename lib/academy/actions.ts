@@ -6,11 +6,12 @@ import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
 import {
   notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
-  onApplicationDeclined, onCoachAdded, onStudentApproved, onStudentRemoved,
+  onCoachAdded, onStudentRemoved,
 } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { TELEMETRY_EXTENSIONS, TIERS, type Tier } from './constants'
+import { approveInquiry, declineInquiry } from './decisions'
 
 // Every action re-checks who is calling. RLS is the backstop for the ones that
 // run as the user; the few that need the service role check permissions here.
@@ -74,38 +75,16 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
 export async function approveApplication(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
-  const id = str(fd, 'id')
-  const coachId = str(fd, 'coach_id') || null
   const tier = str(fd, 'tier') as Tier
   if (!TIERS.includes(tier)) return
-
-  const admin = createAdminClient()
-  const { data: inquiry } = await admin.from('inquiries').select('user_id').eq('id', id).maybeSingle()
-  if (!inquiry) return
-  await admin.from('students').upsert({ profile_id: inquiry.user_id, coach_id: coachId, tier })
-  await admin.from('profiles').update({ role: 'student' }).eq('id', inquiry.user_id).eq('role', 'member')
-  await admin.from('inquiries').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id)
-  // Keep the legacy flag in step until the old tables are retired.
-  await admin.from('members').update({ active: true, tier }).eq('user_id', inquiry.user_id)
-  after(async () => {
-    const { data: coach } = coachId
-      ? await admin.from('profiles').select('display_name, discord_username').eq('id', coachId).maybeSingle()
-      : { data: null }
-    await onStudentApproved(inquiry.user_id, coach ? coach.display_name || coach.discord_username : null)
-  })
+  await approveInquiry(str(fd, 'id'), str(fd, 'coach_id') || null, tier)
   revalidatePath('/coach', 'layout')
 }
 
 export async function declineApplication(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
-  const { data } = await createAdminClient()
-    .from('inquiries')
-    .update({ status: 'declined', decided_at: new Date().toISOString() })
-    .eq('id', str(fd, 'id'))
-    .select('user_id')
-    .maybeSingle()
-  if (data?.user_id) after(() => onApplicationDeclined(data.user_id as string))
+  await declineInquiry(str(fd, 'id'))
   revalidatePath('/coach', 'layout')
 }
 

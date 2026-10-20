@@ -68,6 +68,19 @@ export async function notifyStudentOfReply(studentId: string, coachName: string,
   })
 }
 
+// Approve / Decline buttons for an application, handled by
+// /api/discord/interactions (admins only), plus a link to the site's queue.
+export const applicationButtons = (inquiryId: string): MessagePayload['components'] => [
+  {
+    type: 1,
+    components: [
+      { type: 2, style: 3, label: 'Approve', custom_id: `app:approve:${inquiryId}` },
+      { type: 2, style: 4, label: 'Decline', custom_id: `app:decline:${inquiryId}` },
+      { type: 2, style: 5, label: 'Review on PRISM', url: `${SITE_URL}/coach?tab=applications` },
+    ],
+  },
+]
+
 // Opens a private ticket channel for the applicant and coaches, posts their
 // answers there, and remembers it on the application. Returns the channel ID.
 async function openApplicationTicket(inquiryId: string, applicantId: string, name: string, fields: { name: string; value: string }[]) {
@@ -85,6 +98,7 @@ async function openApplicationTicket(inquiryId: string, applicantId: string, nam
     embeds: [{ title: 'Your application', color: COLORS.ember, fields: fields.map((f) => ({ ...f, value: clip(f.value) })) }],
     allowed_mentions: { users: discordId ? [discordId] : [] },
   })
+  await postToChannel(channel.id, { content: '**For PRISM admins:**', components: applicationButtons(inquiryId) })
   await createAdminClient().from('inquiries').update({ discord_channel_id: channel.id }).eq('id', inquiryId)
   return channel.id
 }
@@ -100,7 +114,7 @@ export async function notifyNewApplication(application: { inquiryId: string; app
         color: COLORS.ember,
         fields: [...fields.map((f) => ({ ...f, value: clip(f.value) })), ...(ticket ? [{ name: 'Ticket', value: `<#${ticket}>` }] : [])],
       }],
-      components: [{ type: 1, components: [{ type: 2, style: 5, label: 'Review on PRISM', url: review }] }],
+      components: applicationButtons(application.inquiryId),
     })
     if (posted || ticket) return
   }
