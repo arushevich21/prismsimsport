@@ -17,7 +17,7 @@ Until `DISCORD_BOT_TOKEN` is set, everything falls back to the old webhooks (`DI
 | Someone is made a coach | **Coach** role. |
 | A coach flags a student team-ready | Post in the captains channel. |
 | A race is saved in edit mode | Lineup posted (then edited in place) in the lineups channel with the 9:16 lineup graphic, linked drivers mentioned, plus one Discord **scheduled event** per timeslot. A car can also have its lineup posted in its own channel (e.g. `#friday-lm24`), picked in the race editor. Unpublishing or deleting removes all of it. The editor says exactly what was posted and what's missing. |
-| Results are saved | New results posted once in the results channel (tick box in the editor). |
+| Results are saved | New results posted once in the results channel with a results graphic (tick box in the editor; up to six per post, the rest go out on the next save). |
 | The roster is saved | Linked drivers get or lose the **LMU Driver** / **ACC Driver** role to match the main lineups. Link a driver to their account in the roster editor. |
 | Someone signs in (optional) | Added to the server automatically (`NEXT_PUBLIC_DISCORD_AUTO_JOIN=true`). |
 
