@@ -14,7 +14,9 @@ export default async function PendingPage() {
 
   const supabase = await createClient()
   const { data: inquiry } = await supabase.from('inquiries').select('status').eq('user_id', viewer.user.id).maybeSingle()
-  if (!inquiry) redirect('/apply')
+  // No application, or an old one that's no longer pending (declined, or a
+  // student who was removed): they can apply again.
+  if (!inquiry || (inquiry.status !== 'pending' && inquiry.status !== 'declined')) redirect('/apply')
   const declined = inquiry.status === 'declined'
 
   return (
@@ -24,11 +26,12 @@ export default async function PendingPage() {
         <h1 className="font-heading text-3xl leading-tight font-bold">{declined ? 'Not this time.' : 'Application received.'}</h1>
         <p className="text-[17px] leading-relaxed text-[#4a4f57]">
           {declined
-            ? 'We can’t take you on as a coaching student right now. You’re still very welcome in the community, and you can ask about future spots in the Discord.'
+            ? 'We can’t take you on as a coaching student right now. You’re still very welcome in the community, and you can apply again whenever you’re ready.'
             : 'Thanks for applying. A coach will look at your answers and get back to you, usually within a few days. You’ll get access to the Academy as soon as you’re approved.'}
         </p>
         <div className="flex flex-col gap-3 xs:flex-row">
-          {DISCORD_INVITE_URL && <a href={DISCORD_INVITE_URL} className={btn.dark}>Join the Discord</a>}
+          {declined && <Link href="/apply" className={btn.dark}>Apply again</Link>}
+          {DISCORD_INVITE_URL && <a href={DISCORD_INVITE_URL} className={declined ? btn.outlineLight : btn.dark}>Join the Discord</a>}
           <Link href="/" className={btn.outlineLight}>Back to PRISM</Link>
         </div>
       </div>
