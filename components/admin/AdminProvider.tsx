@@ -27,8 +27,11 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.from('profiles').select('role').eq('id', userId).maybeSingle()
       if (!cancelled) setIsAdmin(data?.role === 'admin')
     }
-    supabase.auth.getSession().then(({ data }) => check(data.session?.user.id))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => check(session?.user.id))
+    // Fires once straight away with the current session, then on every change.
+    // The lookup is deferred: calling Supabase inside this callback deadlocks.
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setTimeout(() => check(session?.user.id), 0)
+    })
     return () => {
       cancelled = true
       sub.subscription.unsubscribe()

@@ -5,7 +5,7 @@ import { notifyCoachesOfMessage, notifyStudentOfReply } from '@/lib/discord/noti
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Discord → PRISM. Set as the "Interactions Endpoint URL" of the Discord app:
-// https://prismsimsport.app/api/discord/interactions
+// https://www.prismsimsport.app/api/discord/interactions
 // Handles the Reply button on coaching DMs: the button opens a text box, and
 // what's typed there is saved to the on-site chat.
 

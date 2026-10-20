@@ -16,7 +16,8 @@ export function SiteHeader() {
   const open = openOn === pathname
   const setOpen = (value: boolean | ((o: boolean) => boolean)) =>
     setOpenOn((typeof value === 'function' ? value(open) : value) ? pathname : null)
-  const [signedIn, setSignedIn] = useState(false)
+  // null until the session is known, so the button never shows the wrong label.
+  const [signedIn, setSignedIn] = useState<boolean | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -27,9 +28,8 @@ export function SiteHeader() {
 
   // Pages are cached for everyone, so "Sign in" vs "Dashboard" is decided here.
   useEffect(() => {
-    const supabase = createClient()
-    supabase.auth.getSession().then(({ data }) => setSignedIn(!!data.session))
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => setSignedIn(!!session))
+    // Fires once straight away with the current session, then on every change.
+    const { data: sub } = createClient().auth.onAuthStateChange((_e, session) => setSignedIn(!!session))
     return () => sub.subscription.unsubscribe()
   }, [])
 
@@ -58,7 +58,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto hidden items-center gap-3 md:flex">
-          <Link href={account.href} className="tap inline-flex items-center px-2 text-[15px] font-medium text-ink hover:text-iris-deep">
+          <Link href={account.href} className={`tap inline-flex items-center px-2 text-[15px] font-medium text-ink hover:text-iris-deep ${signedIn === null ? 'invisible' : ''}`}>
             {account.label}
           </Link>
           <a href={discordHref} className={`${btn.dark} !py-2.5 text-sm`}>Join the Discord</a>
@@ -94,7 +94,7 @@ export function SiteHeader() {
           </nav>
           <div className="page-x flex flex-col gap-3 pb-5">
             <a href={discordHref} className={btn.dark}>Join the Discord</a>
-            <Link href={account.href} className={btn.outlineLight}>{account.label}</Link>
+            <Link href={account.href} className={`${btn.outlineLight} ${signedIn === null ? 'invisible' : ''}`}>{account.label}</Link>
           </div>
         </div>
       )}

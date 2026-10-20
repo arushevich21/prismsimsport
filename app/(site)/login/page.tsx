@@ -1,19 +1,20 @@
 import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
-import { getViewer } from '@/lib/auth'
+import { getViewer, homeFor } from '@/lib/auth'
 import { DiscordSignIn } from './DiscordSignIn'
 
 export const metadata: Metadata = { title: 'Sign in', robots: { index: false } }
 
-// Sections a sign-in may return to. Anything else falls back to the dashboard.
+// Sections a sign-in may return to. Anything else lands on the viewer's home.
 const SAFE_PREFIXES = ['/apply', '/pending', '/dashboard', '/sessions', '/messages', '/telemetry', '/library', '/setups', '/coach', '/team', '/academy', '/community']
 const isSafeNext = (next: string) => SAFE_PREFIXES.some((p) => next === p || next.startsWith(`${p}/`) || next.startsWith(`${p}?`))
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; error?: string }> }) {
   const { next, error } = await searchParams
-  const target = next && isSafeNext(next) ? next : '/dashboard'
+  const target = next && isSafeNext(next) ? next : ''
 
-  if (await getViewer()) redirect(target)
+  const viewer = await getViewer()
+  if (viewer) redirect(target || homeFor(viewer.role))
 
   return (
     <section className="page-x flex justify-center py-16 sm:py-24">

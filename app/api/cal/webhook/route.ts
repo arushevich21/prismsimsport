@@ -5,7 +5,7 @@ import { notifyBooking } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Cal.com → coaching_sessions. Set this up in Cal.com → Settings → Developer →
-// Webhooks with the URL https://prismsimsport.app/api/cal/webhook, the same
+// Webhooks with the URL https://www.prismsimsport.app/api/cal/webhook, the same
 // secret as CAL_WEBHOOK_SECRET, and the Booking created / rescheduled /
 // cancelled triggers.
 

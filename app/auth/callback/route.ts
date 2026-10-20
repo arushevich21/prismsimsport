@@ -1,4 +1,5 @@
 import { after, NextResponse } from 'next/server'
+import { homeFor, type Role } from '@/lib/auth'
 import { addGuildMember } from '@/lib/discord/api'
 import { createClient } from '@/lib/supabase/server'
 
@@ -19,16 +20,22 @@ export async function GET(request: Request) {
       if (process.env.NEXT_PUBLIC_DISCORD_AUTO_JOIN === 'true' && token && discordId) {
         after(() => addGuildMember(discordId, token))
       }
-      return NextResponse.redirect(`${origin}${next}`)
+      if (next) return NextResponse.redirect(`${origin}${next}`)
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user?.id ?? '').maybeSingle()
+      return NextResponse.redirect(`${origin}${homeFor((profile?.role as Role | undefined) ?? 'member')}`)
     }
     console.error('[auth] code exchange failed:', error.message)
+  } else {
+    // Supabase sends ?error_description=… instead of a code when it couldn't sign them in.
+    console.error('[auth] sign-in failed:', searchParams.get('error_description') ?? searchParams.get('error') ?? 'no code')
   }
 
   return NextResponse.redirect(`${origin}/login?error=signin`)
 }
 
 // Only same-site paths, so the login link can't bounce people to another site.
+// Null means "no page asked for": the viewer's home is used instead.
 function safeNext(next: string | null) {
-  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return '/dashboard'
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) return null
   return next
 }
