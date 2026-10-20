@@ -48,7 +48,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
         if (cancelled) return
         setAccounts((data ?? []).map((p) => ({
           id: p.id as string,
-          label: [p.display_name, p.discord_username && `@${p.discord_username}`].filter(Boolean).join(' · ') || 'Unnamed account',
+          label: [p.display_name, p.discord_username && `@${String(p.discord_username).replace(/#0$/, '')}`].filter(Boolean).join(' · ') || 'Unnamed account',
         })))
       })
     return () => {
