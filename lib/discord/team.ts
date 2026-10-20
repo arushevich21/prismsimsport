@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { SIM_LABEL, SIM_SHORT, carStart, lineupBadge, raceSlots, type Sim } from '@/lib/types'
 import {
   COLORS, botEnabled, clip, deleteChannelMessage, deleteScheduledEvent, discordEnv, editChannelMessage, flagEmoji,
-  postToChannel, setMemberRole, timestamp, upsertScheduledEvent, type MessagePayload,
+  postToChannel, setMemberRole, takeDiscordError, timestamp, upsertScheduledEvent, type MessagePayload,
 } from './api'
 
 // Keeps Discord in step with the team data the admin edits on the site.
@@ -125,8 +125,9 @@ export type RaceSyncReport =
   | {
       status: 'synced'
       lineup: 'posted' | 'updated' | 'no-channel' | 'failed'
+      lineupError?: string // why the lineup post failed, from Discord
       events: { synced: number; failed: number; noServer: boolean }
-      channels: { posted: number; failed: number } // per-car timeslot channels
+      channels: { posted: number; failed: number; error?: string } // per-car timeslot channels
     }
 
 // Posts or updates the lineup announcement and the Discord events for a race.
@@ -146,6 +147,7 @@ export async function syncRace(raceId: string): Promise<RaceSyncReport> {
   } = {}
   const channel = discordEnv.channels.lineups
   let lineup: 'posted' | 'updated' | 'no-channel' | 'failed' = 'no-channel'
+  let lineupError: string | undefined
 
   if (channel) {
     const payload = await lineupMessage(race, lineupGraphic(race))
@@ -155,6 +157,7 @@ export async function syncRace(raceId: string): Promise<RaceSyncReport> {
       const posted = await postToChannel(channel, payload)
       if (posted) updates.discord_message_id = posted.id
       lineup = posted ? 'posted' : 'failed'
+      if (!posted) lineupError = takeDiscordError() ?? undefined
     }
   }
 
@@ -162,7 +165,7 @@ export async function syncRace(raceId: string): Promise<RaceSyncReport> {
   // showing just the cars in that channel. Edited in place on later saves.
   const oldPosts = race.discord_channel_posts ?? {}
   const channelPosts: Record<string, string> = {}
-  const channelReport = { posted: 0, failed: 0 }
+  const channelReport: { posted: number; failed: number; error?: string } = { posted: 0, failed: 0 }
   const byChannel = new Map<string, RaceRow['race_cars']>()
   for (const car of race.race_cars) {
     if (car.discord_channel_id) byChannel.set(car.discord_channel_id, [...(byChannel.get(car.discord_channel_id) ?? []), car])
@@ -174,7 +177,10 @@ export async function syncRace(raceId: string): Promise<RaceSyncReport> {
     if (message) {
       channelPosts[channelId] = message.id
       channelReport.posted++
-    } else channelReport.failed++
+    } else {
+      channelReport.failed++
+      channelReport.error ??= takeDiscordError() ?? undefined
+    }
   }
   for (const [channelId, messageId] of Object.entries(oldPosts)) {
     if (!byChannel.has(channelId)) await deleteChannelMessage(channelId, messageId)
@@ -215,7 +221,7 @@ export async function syncRace(raceId: string): Promise<RaceSyncReport> {
   if (JSON.stringify(events) !== JSON.stringify(race.discord_slot_events ?? {})) updates.discord_slot_events = events
   if (race.discord_event_id) updates.discord_event_id = null
   if (Object.keys(updates).length) await admin.from('races').update(updates).eq('id', race.id)
-  return { status: 'synced', lineup, events: eventReport, channels: channelReport }
+  return { status: 'synced', lineup, lineupError, events: eventReport, channels: channelReport }
 }
 
 // Returns whether there was anything on Discord to remove.

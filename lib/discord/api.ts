@@ -54,6 +54,23 @@ export const COLORS = { ice: 0x9cc4f2, iris: 0xa5a8f7, ember: 0xffb678, graphite
 // Discord limits: 1024 per field value, 4096 per description, 256 per title.
 export const clip = (s: string, max = 1024) => (s.length > max ? s.slice(0, max - 1) + '…' : s)
 
+// Why the most recent Discord call failed, in plain words for the admin
+// editors (Discord's own error codes: discord.com/developers/docs/topics/opcodes-and-status-codes).
+let lastError: string | null = null
+export function takeDiscordError() {
+  const e = lastError
+  lastError = null
+  return e
+}
+function explain(status: number, code: number | undefined) {
+  if (status === 401) return 'the bot token is wrong or was reset'
+  if (code === 10003) return "that channel ID doesn't match a channel in the server (copy the channel's ID, not the category's)"
+  if (code === 50001) return "the bot can't see that channel. It's private: add the PRISM bot role to its permissions"
+  if (code === 50013) return 'the bot can see the channel but lacks permission there (it needs Send Messages, Embed Links and Attach Files)'
+  if (status === 404) return 'Discord says that channel or server does not exist'
+  return `Discord answered ${status}${code ? ` (code ${code})` : ''}`
+}
+
 // Calls the Discord API as the bot. Never throws: returns null on failure so a
 // Discord outage can't break the site action that triggered it.
 export async function discord<T = unknown>(method: string, path: string, body?: unknown, extraHeaders?: Record<string, string>): Promise<T | null> {
@@ -76,7 +93,13 @@ export async function discord<T = unknown>(method: string, path: string, body?: 
         continue
       }
       if (!res.ok) {
-        console.error(`[discord] ${method} ${path} → ${res.status}`, await res.text().catch(() => ''))
+        const text = await res.text().catch(() => '')
+        console.error(`[discord] ${method} ${path} → ${res.status}`, text)
+        let code: number | undefined
+        try {
+          code = (JSON.parse(text) as { code?: number }).code
+        } catch {}
+        lastError = explain(res.status, code)
         return null
       }
       return res.status === 204 ? ({} as T) : ((await res.json()) as T)

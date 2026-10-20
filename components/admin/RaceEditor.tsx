@@ -53,7 +53,7 @@ function discordNote(r: RaceSyncReport | null): { text: string; problem: boolean
   if (r.lineup === 'posted') done.push('Lineup posted on Discord.')
   else if (r.lineup === 'updated') done.push('Discord lineup post updated.')
   else if (r.lineup === 'no-channel') problems.push("No lineup post: DISCORD_CHANNEL_LINEUPS isn't set in Vercel.")
-  else problems.push("Couldn't post the lineup: check the bot can view and send messages in the lineups channel.")
+  else problems.push(`Couldn't post the lineup: ${r.lineupError ?? 'check the bot can view and send messages in the lineups channel'}.`)
 
   const { synced, failed, noServer } = r.events
   const plural = (n: number) => `${n} Discord event${n === 1 ? '' : 's'}`
@@ -63,7 +63,7 @@ function discordNote(r: RaceSyncReport | null): { text: string; problem: boolean
 
   const { posted, failed: channelFailed } = r.channels
   if (posted) done.push(`Posted in ${posted} timeslot channel${posted === 1 ? '' : 's'}.`)
-  if (channelFailed) problems.push(`Couldn't post in ${channelFailed} timeslot channel${channelFailed === 1 ? '' : 's'}: check the bot can view and send messages there.`)
+  if (channelFailed) problems.push(`Couldn't post in ${channelFailed} timeslot channel${channelFailed === 1 ? '' : 's'}: ${r.channels.error ?? 'check the bot can view and send messages there'}.`)
   return { text: [...done, ...problems].join(' '), problem: problems.length > 0 }
 }
 
