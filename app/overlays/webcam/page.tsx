@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
+import { Fragment } from 'react'
+import { SUPPORTERS, TITLE_SPONSOR } from '@/lib/site'
 
 export const metadata: Metadata = { title: 'Webcam overlay' }
 
@@ -25,9 +27,15 @@ export default async function WebcamOverlayPage({ searchParams }: { searchParams
         </div>
       </div>
       <div className="flex items-center justify-center gap-7 border-t border-graphite-3 bg-ink px-5 py-3">
-        <Image src="/brand/cube-controls-white.png" alt="Cube Controls" width={1137} height={290} className="h-8 w-auto" priority />
-        <i className="h-[30px] w-px bg-graphite-3" />
-        <Image src="/brand/trackside-white.png" alt="Trackside" width={1600} height={281} className="h-[26px] w-auto" priority />
+        {SUPPORTERS.map((s) =>
+          s.logo ? (
+            <Fragment key={s.name}>
+              <Image src={s.logo.src} alt={s.name} width={s.logo.width} height={s.logo.height} className="h-8 w-auto" priority />
+              <i className="h-[30px] w-px bg-graphite-3" />
+            </Fragment>
+          ) : null
+        )}
+        <Image src={TITLE_SPONSOR.logo.src} alt={TITLE_SPONSOR.name} width={TITLE_SPONSOR.logo.width} height={TITLE_SPONSOR.logo.height} className="h-[26px] w-auto" priority />
       </div>
     </div>
   )
