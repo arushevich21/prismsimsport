@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { TWITCH_IRC_URL, emoteUrl, parseIrcLine, toChatMessage, type ChatMessage } from '@/lib/overlays/twitch'
 
 const MAX_MESSAGES = 40
+const FADE_OUT_MS = 1000
 const NAME_COLORS = ['text-ice', 'text-iris', 'text-ember']
 
 // Same viewer, same colour, every time.
@@ -13,10 +14,28 @@ function nameColor(name: string) {
   return NAME_COLORS[Math.abs(h) % NAME_COLORS.length]
 }
 
+type ShownMessage = ChatMessage & { at: number }
+
 // Live chat for an OBS browser source. Connects anonymously, reconnects on
 // its own, and drops messages that mods delete or users who get timed out.
-export function TwitchChat({ channel }: { channel: string }) {
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+// With fadeSeconds > 0, each message fades out that long after it arrives.
+export function TwitchChat({ channel, fadeSeconds }: { channel: string; fadeSeconds: number }) {
+  const [messages, setMessages] = useState<ShownMessage[]>([])
+  const [now, setNow] = useState(0)
+  const fadeMs = fadeSeconds * 1000
+
+  useEffect(() => {
+    if (fadeMs <= 0) return
+    const tick = setInterval(() => {
+      const t = Date.now()
+      setNow(t)
+      setMessages((ms) => {
+        const kept = ms.filter((m) => t - m.at < fadeMs)
+        return kept.length === ms.length ? ms : kept
+      })
+    }, 500)
+    return () => clearInterval(tick)
+  }, [fadeMs])
 
   useEffect(() => {
     let ws: WebSocket | null = null
@@ -43,7 +62,7 @@ export function TwitchChat({ channel }: { channel: string }) {
               break
             case 'PRIVMSG': {
               const m = toChatMessage(line)
-              if (m) setMessages((ms) => [...ms, m].slice(-MAX_MESSAGES))
+              if (m) setMessages((ms) => [...ms, { ...m, at: Date.now() }].slice(-MAX_MESSAGES))
               break
             }
             case 'CLEARMSG':
@@ -78,16 +97,19 @@ export function TwitchChat({ channel }: { channel: string }) {
   return (
     <div className="flex h-dvh w-screen flex-col bg-graphite text-white">
       <header className="border-b border-graphite-3 px-[22px] py-3.5">
-        <b className="font-heading text-xl tracking-[.04em]">CHAT</b>
+        <b className="font-heading text-2xl tracking-[.04em]">CHAT</b>
       </header>
-      <ol className="flex flex-1 flex-col justify-end gap-3 overflow-hidden px-[22px] pt-3.5 pb-[18px]">
+      {/* min-h-0 keeps the list inside the box, so the newest messages stay in view at the bottom. */}
+      <ol className="flex min-h-0 flex-1 flex-col justify-end gap-3.5 overflow-hidden px-[22px] pt-3.5 pb-[18px]">
         {messages.map((m) => (
           <li
             key={m.id}
-            className="text-[20px] leading-[1.35] break-words text-[#e9ecf1] transition-[opacity,translate] duration-400 ease-out starting:translate-y-3.5 starting:opacity-0 motion-reduce:transition-none"
+            className={`shrink-0 text-[26px] leading-[1.3] break-words text-[#e9ecf1] transition-[opacity,translate] duration-400 ease-out starting:translate-y-3.5 starting:opacity-0 motion-reduce:transition-none ${
+              fadeMs > 0 && now - m.at > fadeMs - FADE_OUT_MS ? 'opacity-0' : ''
+            }`}
           >
             {m.badge && (
-              <span className="mr-2 inline-block bg-iris px-[7px] py-0.5 align-[3px] font-mono text-[13px] font-semibold tracking-widest text-graphite">
+              <span className="mr-2 inline-block bg-iris px-[7px] py-0.5 align-[4px] font-mono text-base font-semibold tracking-widest text-graphite">
                 {m.badge}
               </span>
             )}
