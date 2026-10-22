@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       userAgent: '*',
       allow: '/',
       // Signed-in areas: nothing useful for search engines.
-      disallow: ['/api/', '/auth/', '/coach', '/dashboard', '/sessions', '/messages', '/telemetry', '/library', '/setups', '/apply', '/pending', '/login'],
+      disallow: ['/api/', '/auth/', '/coach', '/dashboard', '/sessions', '/messages', '/telemetry', '/library', '/setups', '/apply', '/pending', '/login', '/overlays'],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   }
