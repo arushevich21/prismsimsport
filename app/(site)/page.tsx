@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { AdminHint } from '@/components/admin/AdminHint'
 import { Editable } from '@/components/admin/Editable'
 import { NextRaceCard } from '@/components/site/NextRaceCard'
+import { Sponsors } from '@/components/site/Sponsors'
 import { PrismBeam } from '@/components/site/PrismBeam'
 import { ResultsList } from '@/components/site/ResultsList'
 import { getLatestResults, getNextRace } from '@/lib/data'
@@ -186,15 +187,7 @@ export default async function HomePage() {
           </div>
         </div>
         <div className="border-t border-graphite-3">
-          <div className="page-x flex flex-col gap-5 py-9 md:flex-row md:items-center md:gap-10">
-            <span className={`${eyebrow} text-muted-dark`}>Supported by</span>
-            <a href={PARTNERS.cube.url} aria-label="Cube Controls" className="shrink-0">
-              <Image src="/brand/cube-controls-white.png" alt="Cube Controls" width={1137} height={290} className="h-11 w-auto sm:h-14" />
-            </a>
-            <p className="flex-1 leading-relaxed text-body-dark">
-              Redefining the sim racing experience, offering high-quality products for the most demanding virtual drivers.
-            </p>
-          </div>
+          <Sponsors />
         </div>
       </section>
 

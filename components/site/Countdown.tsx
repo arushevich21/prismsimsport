@@ -34,23 +34,33 @@ function parts(secondsLeft: number) {
   ]
 }
 
-export function Countdown({ startsAt }: { startsAt: string }) {
+// With several timeslots, counts down to the next one that hasn't started.
+export function Countdown({ startsAt }: { startsAt: string | string[] }) {
   const now = useSyncExternalStore(subscribeClock, nowInSeconds, serverNow)
-  const target = Math.floor(Date.parse(startsAt) / 1000)
+  const targets = (Array.isArray(startsAt) ? startsAt : [startsAt]).map((t) => Math.floor(Date.parse(t) / 1000)).sort((a, b) => a - b)
+  const target = now === null ? targets[0]! : targets.find((t) => t > now)
 
-  if (now !== null && now >= target) {
+  if (now !== null && target === undefined) {
     return <p className="rounded-lg bg-graphite py-4 text-center font-mono text-lg font-semibold text-ember">Racing now</p>
   }
 
-  const cells = now === null ? parts(0).map((p) => ({ ...p, value: '--' })) : parts(target - now)
-  return (
-    <div className="grid grid-cols-4 gap-2 sm:gap-2.5" role="timer" aria-label="Time until green flag">
+  const cells = now === null ? parts(0).map((p) => ({ ...p, value: '--' })) : parts(target! - now)
+  const grid = (
+    <div className="grid grid-cols-4 gap-2 sm:gap-2.5" role="timer" aria-label={targets.length > 1 ? 'Time until the next timeslot' : 'Time until green flag'}>
       {cells.map((c) => (
         <div key={c.label} className="rounded-lg bg-graphite px-1 py-3 text-center sm:py-3.5">
           <div className="font-mono text-2xl font-semibold tabular-nums sm:text-3xl">{c.value}</div>
           <div className="text-[11px] tracking-wider text-muted-dark uppercase sm:text-xs">{c.label}</div>
         </div>
       ))}
+    </div>
+  )
+  // An earlier timeslot is already running.
+  if (now === null || targets[0]! > now) return grid
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-center font-mono text-sm font-semibold text-ember">Racing now · next timeslot in</p>
+      {grid}
     </div>
   )
 }

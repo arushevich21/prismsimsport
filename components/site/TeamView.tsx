@@ -1,11 +1,13 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
+import { getAcademyDrivers, getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
 import { Editable } from '@/components/admin/Editable'
 import { classChip } from '@/lib/site'
-import { SIM_SHORT, type Sim } from '@/lib/types'
+import { SIM_SHORT, carStart, lineupBadge, raceSlots, type Sim } from '@/lib/types'
 import { btn, eyebrow, h2 } from '@/lib/ui'
 import { Countdown, LocalTime } from './Countdown'
+import { AcademyDrivers } from './AcademyDrivers'
+import { CarLogo } from './CarLogo'
 import { DriverCard } from './DriverCard'
 import { Flag } from './Flag'
 import { ResultsList } from './ResultsList'
@@ -16,12 +18,13 @@ const TABS: { sim: Sim; label: string }[] = [
 ]
 
 export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; season?: number }) {
-  const [race, lineup, seasons] = await Promise.all([getNextRace(sim), getMainLineup(sim), getSeasons(sim)])
+  const [race, lineup, academy, seasons] = await Promise.all([getNextRace(sim), getMainLineup(sim), getAcademyDrivers(sim), getSeasons(sim)])
   const currentYear = new Date().getFullYear()
   const season = requestedSeason ?? seasons[0] ?? currentYear
   const seasonOptions = [...new Set([season, ...seasons])].sort((a, b) => b - a)
   const stats = await getSeasonResults(sim, season)
   const short = SIM_SHORT[sim]
+  const slots = race ? raceSlots(race) : []
 
   return (
     <>
@@ -59,28 +62,37 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
                 <h2 className="font-heading text-2xl font-bold sm:text-[1.75rem]">{race.event_name ?? race.series ?? 'Next race'}</h2>
                 <p className="text-[#4a4f57]">
                   {[race.track, race.race_length].filter(Boolean).join(' · ')}
-                  {race.starts_at && <> · <LocalTime iso={race.starts_at} fallback="" /></>}
+                  {slots.length === 1 && <> · <LocalTime iso={slots[0]!} fallback="" /></>}
+                  {slots.length > 1 && <> · {slots.length} timeslots</>}
                 </p>
               </>
             ) : (
               <p className="text-[17px] text-[#4a4f57]">The lineup for our next {short} race is posted here once it&apos;s set.</p>
             )}
           </div>
-          {race?.starts_at && (
+          {slots.length > 0 && (
             <div className="max-w-md rounded-xl bg-graphite p-3 text-white sm:p-4">
-              <Countdown startsAt={race.starts_at} />
+              <Countdown startsAt={slots} />
             </div>
           )}
           {race && race.cars.length > 0 && (
             <div className="grid gap-4 sm:gap-5 md:grid-cols-2 xl:grid-cols-3">
-              {race.cars.map((car) => (
+              {race.cars.map((car) => {
+                const start = carStart(car, race)
+                return (
                 <article key={car.id} className="overflow-hidden rounded-xl border border-line">
                   <div className="flex items-center gap-3 bg-graphite px-5 py-4 text-white">
+                    <CarLogo car={car.car_name} />
                     <span className="flex-1 font-semibold">{car.car_name ?? 'Car'}</span>
                     {car.class && (
                       <span className={`rounded px-2 py-1 text-[11px] font-semibold tracking-wider text-ink uppercase ${classChip(car.class)}`}>{car.class}</span>
                     )}
                   </div>
+                  {slots.length > 1 && start && (
+                    <p className="border-b border-mist bg-mist px-5 py-2 text-[13px] text-[#4a4f57]">
+                      Timeslot · <span className="font-semibold text-ink"><LocalTime iso={start} fallback="" /></span>
+                    </p>
+                  )}
                   <ul className="px-5 py-1">
                     {car.drivers.map((d) => (
                       <li key={d.id} className="flex items-center gap-3 border-b border-mist py-3 last:border-0">
@@ -89,14 +101,18 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
                           {d.name}
                           {d.nickname && <span className="font-normal text-muted"> “{d.nickname}”</span>}
                         </span>
-                        {!d.main_lineup.includes(sim) && (
+                        {lineupBadge(d, sim) === 'GUEST' && (
                           <span className="rounded border border-[#cbd1d9] px-1.5 py-0.5 text-[11px] font-semibold tracking-wider text-[#4a4f57]">GUEST</span>
+                        )}
+                        {lineupBadge(d, sim) === 'ACADEMY' && (
+                          <span className="rounded bg-iris px-1.5 py-0.5 text-[11px] font-semibold tracking-wider text-ink">ACADEMY</span>
                         )}
                       </li>
                     ))}
                   </ul>
                 </article>
-              ))}
+                )
+              })}
             </div>
           )}
           </div>
@@ -119,7 +135,7 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
           <Editable editor="roster" sim={sim}>
           {lineup.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
-              {lineup.map((d) => <DriverCard key={d.id} driver={d} />)}
+              {lineup.map((d) => <DriverCard key={d.id} driver={d} showRank={sim === 'lmu'} />)}
             </div>
           ) : (
             <p className="text-muted">The lineup is being finalised.</p>
@@ -139,6 +155,8 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
               <Link href="/academy#coaches" className={btn.outlineDark}>Meet the coaches</Link>
             </div>
           </aside>
+
+          <AcademyDrivers sim={sim} drivers={academy} />
         </div>
       </section>
 

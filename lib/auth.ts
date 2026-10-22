@@ -27,6 +27,12 @@ export const getViewer = cache(async (): Promise<Viewer | null> => {
   return { user, role: (profile?.role as Role | undefined) ?? 'member' }
 })
 
+// Where a sign-in lands when no page was asked for. Members only reach the
+// application form by choosing to apply.
+export function homeFor(role: Role) {
+  return role === 'member' ? '/' : '/dashboard'
+}
+
 function loginUrl(next: string) {
   return `/login?next=${encodeURIComponent(next)}`
 }
@@ -39,7 +45,7 @@ export async function requireRole(roles: Role[], next: string): Promise<Viewer> 
 }
 
 // Academy pages: approved students, coaches and admins. Anyone else is sent
-// to their application status (or the application form).
+// to their application status (or the Academy page, to choose to apply).
 export async function requireAcademyAccess(next: string): Promise<Viewer> {
   const viewer = await getViewer()
   if (!viewer) redirect(loginUrl(next))
@@ -51,7 +57,7 @@ export async function requireAcademyAccess(next: string): Promise<Viewer> {
     .select('id')
     .eq('user_id', viewer.user.id)
     .maybeSingle()
-  redirect(inquiry ? '/pending' : '/apply')
+  redirect(inquiry ? '/pending' : '/academy')
 }
 
 export async function requireStaff(next: string): Promise<Viewer> {

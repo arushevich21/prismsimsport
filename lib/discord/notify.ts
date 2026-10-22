@@ -1,7 +1,11 @@
 import 'server-only'
+import { PROGRAM_SHORT, type Program } from '@/lib/academy/constants'
 import { SITE_URL } from '@/lib/site'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { COLORS, botEnabled, clip, discordEnv, postToChannel, sendDM, setMemberRole, timestamp, type MessagePayload } from './api'
+import {
+  COLORS, botEnabled, clip, createPrivateChannel, discordEnv, makeReadOnlyFor, postToChannel, sendDM, setMemberRole, slugify, timestamp,
+  type MessagePayload,
+} from './api'
 import { postDiscordEmbed } from './webhook'
 
 // What the site tells Discord. With a bot token configured these become DMs,
@@ -65,14 +69,69 @@ export async function notifyStudentOfReply(studentId: string, coachName: string,
   })
 }
 
-export async function notifyNewApplication(name: string, fields: { name: string; value: string }[]) {
+// Approve (for a program) / Decline buttons for an application, handled by
+// /api/discord/interactions (admins only), plus a link to the site's queue.
+export const applicationButtons = (inquiryId: string): MessagePayload['components'] => [
+  {
+    type: 1,
+    components: [
+      { type: 2, style: 3, label: 'Approve for LMU', custom_id: `app:approve-lmu:${inquiryId}` },
+      { type: 2, style: 3, label: 'Approve for ACC', custom_id: `app:approve-acc:${inquiryId}` },
+      { type: 2, style: 1, label: 'Approve for both', custom_id: `app:approve-both:${inquiryId}` },
+      { type: 2, style: 4, label: 'Decline', custom_id: `app:decline:${inquiryId}` },
+      { type: 2, style: 5, label: 'Review on PRISM', url: `${SITE_URL}/coach?tab=applications` },
+    ],
+  },
+]
+
+// LMU Academy / ACC Academy roles to match a student's program (none = neither).
+async function setProgramRoles(discordId: string, program: Program | null) {
+  await setMemberRole(discordId, discordEnv.roles.academyLmu, program === 'lmu' || program === 'both')
+  await setMemberRole(discordId, discordEnv.roles.academyAcc, program === 'acc' || program === 'both')
+}
+
+const PROGRAM_ACCESS: Record<Program, string> = {
+  lmu: 'the LMU Academy role and access to the team chat',
+  acc: 'the ACC Academy role and access to the ACC / Falcon channel',
+  both: 'the LMU and ACC Academy roles, with access to the team chat and the ACC / Falcon channel',
+}
+
+// Opens a private ticket channel for the applicant and coaches, posts their
+// answers there, and remembers it on the application. Returns the channel ID.
+async function openApplicationTicket(inquiryId: string, applicantId: string, name: string, fields: { name: string; value: string }[]) {
+  if (!discordEnv.applicationsCategory) return null
+  const [discordId] = await discordIds([applicantId])
+  const channel = await createPrivateChannel(`application-${slugify(name)}`, {
+    parentId: discordEnv.applicationsCategory,
+    members: discordId ? [discordId] : [],
+    roles: [discordEnv.roles.coach].filter((id): id is string => !!id),
+    topic: `PRISM Academy application from ${name}`,
+  })
+  if (!channel) return null
+  await postToChannel(channel.id, {
+    content: discordId ? `<@${discordId}>, thanks for applying to PRISM Academy! A coach will review your application and reply here.` : `Application from **${clip(name, 200)}** (not in the server yet, so they can't see this channel).`,
+    embeds: [{ title: 'Your application', color: COLORS.ember, fields: fields.map((f) => ({ ...f, value: clip(f.value) })) }],
+    allowed_mentions: { users: discordId ? [discordId] : [] },
+  })
+  await postToChannel(channel.id, { content: '**For PRISM admins:**', components: applicationButtons(inquiryId) })
+  await createAdminClient().from('inquiries').update({ discord_channel_id: channel.id }).eq('id', inquiryId)
+  return channel.id
+}
+
+export async function notifyNewApplication(application: { inquiryId: string; applicantId: string; name: string }, fields: { name: string; value: string }[]) {
+  const { name } = application
   const review = `${SITE_URL}/coach?tab=applications`
-  if (botEnabled() && discordEnv.channels.staff) {
-    const posted = await postToChannel(discordEnv.channels.staff, {
-      embeds: [{ title: `New coaching application: ${clip(name, 200)}`, color: COLORS.ember, fields: fields.map((f) => ({ ...f, value: clip(f.value) })) }],
-      components: [{ type: 1, components: [{ type: 2, style: 5, label: 'Review on PRISM', url: review }] }],
+  if (botEnabled()) {
+    const ticket = await openApplicationTicket(application.inquiryId, application.applicantId, name, fields)
+    const posted = discordEnv.channels.staff && await postToChannel(discordEnv.channels.staff, {
+      embeds: [{
+        title: `New coaching application: ${clip(name, 200)}`,
+        color: COLORS.ember,
+        fields: [...fields.map((f) => ({ ...f, value: clip(f.value) })), ...(ticket ? [{ name: 'Ticket', value: `<#${ticket}>` }] : [])],
+      }],
+      components: applicationButtons(application.inquiryId),
     })
-    if (posted) return
+    if (posted || ticket) return
   }
   await postDiscordEmbed(process.env.DISCORD_WEBHOOK_URL, {
     title: 'New coaching application',
@@ -122,11 +181,33 @@ export async function notifyBooking(coachId: string, who: string, minutes: numbe
   await postDiscordEmbed(process.env.DISCORD_QA_WEBHOOK_URL, { title: 'New coaching session booked', fields: [...fields, { name: 'Queue', value: queue }] })
 }
 
-export async function onStudentApproved(studentId: string, coachName: string | null) {
+// Posts the decision in the applicant's ticket and leaves it read-only for
+// them, so the history stays but the conversation moves on.
+async function closeApplicationTicket(applicantId: string, discordId: string | undefined, message: string) {
+  const { data } = await createAdminClient().from('inquiries').select('discord_channel_id').eq('user_id', applicantId).maybeSingle()
+  const channel = data?.discord_channel_id as string | null | undefined
+  if (!channel) return
+  await postToChannel(channel, { content: discordId ? `<@${discordId}> ${message}` : message, allowed_mentions: { users: discordId ? [discordId] : [] } })
+  if (discordId) await makeReadOnlyFor(channel, discordId)
+}
+
+export async function onApplicationDeclined(applicantId: string) {
+  if (!botEnabled()) return
+  const [id] = await discordIds([applicantId])
+  await closeApplicationTicket(applicantId, id, 'Thanks for applying. We can’t offer you a spot in the academy right now, but you’re welcome to keep racing with the community and apply again later.')
+}
+
+export async function onStudentApproved(studentId: string, coachName: string | null, program: Program) {
   if (!botEnabled()) return
   const [id] = await discordIds([studentId])
+  await closeApplicationTicket(
+    studentId,
+    id,
+    `You’re in! Welcome to PRISM Academy (${PROGRAM_SHORT[program]})${coachName ? `. Your coach is **${clip(coachName, 100)}**` : ''}. You now have ${PROGRAM_ACCESS[program]}.`
+  )
   if (!id) return
   await setMemberRole(id, discordEnv.roles.academy, true)
+  await setProgramRoles(id, program)
   await sendDM(id, {
     embeds: [{
       title: 'Welcome to PRISM Academy',
@@ -140,7 +221,16 @@ export async function onStudentApproved(studentId: string, coachName: string | n
 export async function onStudentRemoved(studentId: string) {
   if (!botEnabled()) return
   const [id] = await discordIds([studentId])
-  if (id) await setMemberRole(id, discordEnv.roles.academy, false)
+  if (!id) return
+  await setMemberRole(id, discordEnv.roles.academy, false)
+  await setProgramRoles(id, null)
+}
+
+// An admin changed which program a student is in.
+export async function onStudentProgramChanged(studentId: string, program: Program | null) {
+  if (!botEnabled()) return
+  const [id] = await discordIds([studentId])
+  if (id) await setProgramRoles(id, program)
 }
 
 export async function onCoachAdded(profileId: string) {

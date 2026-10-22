@@ -10,7 +10,7 @@ Work top to bottom. Steps marked **before merge** can be done while the old site
    - already set: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_WEBHOOK_URL`, `DISCORD_QA_WEBHOOK_URL`, `NEXT_PUBLIC_DISCORD_INVITE_URL`
    - new: `CAL_WEBHOOK_SECRET`
    - Discord bot (optional at launch; webhooks are the fallback): see `docs/DISCORD_SETUP.md`
-4. **Cal.com**: webhook to `https://prismsimsport.app/api/cal/webhook` with the secret above and the Booking created / rescheduled / cancelled triggers. Event types `coaching-30`, `coaching-60`, `coaching-90` on each coach's account.
+4. **Cal.com**: webhook to `https://www.prismsimsport.app/api/cal/webhook` with the secret above and the Booking created / rescheduled / cancelled triggers. Event types `coaching-30`, `coaching-60`, `coaching-90` on each coach's account.
 5. **Preview test** (recommended): push the `overhaul` branch, open the Vercel preview, sign in, and click through: Home, Team (LMU/ACC), edit mode (save a race, a result, a roster change), Academy pages, coach queue. Make one test Cal.com booking to confirm it appears in the queue.
 
 ## Launch

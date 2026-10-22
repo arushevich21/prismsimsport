@@ -1,5 +1,6 @@
 import { DISCORD_INVITE_URL } from '@/lib/site'
-import { SIM_SHORT, type Race } from '@/lib/types'
+import { SIM_SHORT, carStart, raceSlots, type Race } from '@/lib/types'
+import { CarLogo } from './CarLogo'
 import { Countdown, LocalTime } from './Countdown'
 
 export function NextRaceCard({ race }: { race: Race | null }) {
@@ -17,7 +18,15 @@ export function NextRaceCard({ race }: { race: Race | null }) {
   }
 
   const subtitle = [race.series ?? race.event_name, race.race_length].filter(Boolean).join(' · ')
-  const entries = race.cars.map((c) => [c.car_name, c.class].filter(Boolean).join(' · ')).filter(Boolean)
+  const entries = race.cars
+    .map((c) => ({ id: c.id, car: c.car_name, label: [c.car_name, c.class].filter(Boolean).join(' · ') }))
+    .filter((e) => e.label)
+  const slots = raceSlots(race)
+  // With several timeslots, each row names the cars starting in it.
+  const slotRows = slots.map((iso, i) => {
+    const cars = race.cars.filter((c) => Date.parse(carStart(c, race) ?? '') === Date.parse(iso)).map((c) => c.car_name).filter(Boolean)
+    return { iso, label: slots.length === 1 ? 'Green flag' : cars.length ? cars.join(', ') : `Timeslot ${i + 1}` }
+  })
 
   return (
     <aside aria-label="Next race" className="flex flex-col gap-6 rounded-xl border border-graphite-3 bg-graphite-2 p-5 sm:p-8">
@@ -29,18 +38,25 @@ export function NextRaceCard({ race }: { race: Race | null }) {
         <p className="font-heading text-2xl leading-tight font-bold sm:text-[1.75rem]">{race.track ?? race.event_name ?? 'Track to be confirmed'}</p>
         {subtitle && <p className="text-body-dark">{subtitle}</p>}
       </div>
-      {race.starts_at && <Countdown startsAt={race.starts_at} />}
+      {slots.length > 0 && <Countdown startsAt={slots} />}
       <dl className="flex flex-col text-[15px]">
-        {race.starts_at && (
-          <div className="flex justify-between gap-4 border-t border-graphite-3 py-3">
-            <dt className="text-muted-dark">Green flag</dt>
-            <dd className="text-right"><LocalTime iso={race.starts_at} fallback="" /></dd>
+        {slotRows.map((s) => (
+          <div key={s.iso} className="flex justify-between gap-4 border-t border-graphite-3 py-3">
+            <dt className="text-muted-dark">{s.label}</dt>
+            <dd className="text-right"><LocalTime iso={s.iso} fallback="" /></dd>
           </div>
-        )}
+        ))}
         {entries.length > 0 && (
           <div className="flex justify-between gap-4 border-t border-graphite-3 py-3">
             <dt className="shrink-0 text-muted-dark">PRISM entries</dt>
-            <dd className="text-right">{entries.join(', ')}</dd>
+            <dd className="flex flex-col gap-1 text-right">
+              {entries.map((e) => (
+                <span key={e.id} className="flex items-center justify-end gap-2.5">
+                  <CarLogo car={e.car} size="sm" />
+                  {e.label}
+                </span>
+              ))}
+            </dd>
           </div>
         )}
       </dl>

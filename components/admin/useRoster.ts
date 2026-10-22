@@ -10,7 +10,7 @@ export type AdminDriver = Driver & { archived: boolean; sort_order: number; prof
 async function fetchRoster() {
   const { data } = await createClient()
     .from('drivers')
-    .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, archived, sort_order, profile_id')
+    .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on, archived, sort_order, profile_id')
     .order('sort_order')
     .order('name')
   return (data ?? []) as AdminDriver[]

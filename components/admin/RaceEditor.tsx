@@ -2,12 +2,13 @@
 
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState } from 'react'
-import { refreshPublicPages, removeRaceFromDiscord, syncRaceToDiscord } from '@/lib/admin/actions'
+import { listDiscordChannels, refreshPublicPages, removeRaceFromDiscord, syncRaceToDiscord } from '@/lib/admin/actions'
 import {
   CLASSES, dangerBtn, errorText, field, getCountryOptions, isoToLocalInput, label, localInputToIso, primaryBtn, smallBtn, uid,
 } from '@/lib/admin/shared'
+import type { RaceSyncReport } from '@/lib/discord/team'
 import { createClient } from '@/lib/supabase/client'
-import { SIM_SHORT, type Sim } from '@/lib/types'
+import { SIM_SHORT, lineupBadge, type Sim } from '@/lib/types'
 import { useRoster, type AdminDriver } from './useRoster'
 
 type RaceRow = {
@@ -19,10 +20,12 @@ type RaceRow = {
   starts_at: string | null
   stream_url: string | null
   published: boolean
-  race_cars: { car_name: string | null; class: string | null; sort_order: number; race_car_drivers: { driver_id: string; sort_order: number }[] }[]
+  race_cars: { car_name: string | null; class: string | null; sort_order: number; starts_at: string | null; discord_channel_id: string | null; race_car_drivers: { driver_id: string; sort_order: number }[] }[]
 }
 
-type CarDraft = { key: string; car_name: string; cls: string; driverIds: string[] }
+// starts: this car's timeslot as a datetime-local value; blank = the race's green flag.
+// channel: a Discord channel that also gets this car's lineup (e.g. #friday-lm24).
+type CarDraft = { key: string; car_name: string; cls: string; starts: string; channel: string; driverIds: string[] }
 type Form = { event_name: string; series: string; track: string; race_length: string; starts: string; stream_url: string; published: boolean }
 
 const BLANK: Form = { event_name: '', series: '', track: '', race_length: '', starts: '', stream_url: '', published: true }
@@ -31,15 +34,40 @@ async function fetchRaces(sim: Sim): Promise<{ rows: RaceRow[] } | { error: stri
   const grace = new Date(Date.now() - GRACE_MS).toISOString()
   const { data, error } = await createClient()
     .from('races')
-    .select('id, event_name, series, track, race_length, starts_at, stream_url, published, race_cars ( car_name, class, sort_order, race_car_drivers ( driver_id, sort_order ) )')
+    .select('id, event_name, series, track, race_length, starts_at, stream_url, published, race_cars ( car_name, class, sort_order, starts_at, discord_channel_id, race_car_drivers ( driver_id, sort_order ) )')
     .eq('sim', sim)
-    .or(`starts_at.gte.${grace},starts_at.is.null`)
+    .or(`last_start_at.gte.${grace},starts_at.is.null`)
     .order('starts_at', { ascending: true, nullsFirst: false })
   if (error) return { error: errorText(error) }
   return { rows: (data ?? []) as RaceRow[] }
 }
 
-const newCar = (sim: Sim): CarDraft => ({ key: uid(), car_name: '', cls: CLASSES[sim][0]!, driverIds: [] })
+// What actually happened on Discord, plus whether anything needs fixing.
+function discordNote(r: RaceSyncReport | null): { text: string; problem: boolean } {
+  if (!r) return { text: '', problem: false }
+  if (r.status === 'off') return { text: "Discord isn't connected (no bot token in Vercel), so nothing was posted.", problem: true }
+  if (r.status === 'removed') return { text: r.hadPosts ? 'Removed its lineup post and events from Discord.' : '', problem: false }
+
+  const done: string[] = []
+  const problems: string[] = []
+  if (r.lineup === 'posted') done.push('Lineup posted on Discord.')
+  else if (r.lineup === 'updated') done.push('Discord lineup post updated.')
+  else if (r.lineup === 'no-channel') problems.push("No lineup post: DISCORD_CHANNEL_LINEUPS isn't set in Vercel.")
+  else problems.push(`Couldn't post the lineup: ${r.lineupError ?? 'check the bot can view and send messages in the lineups channel'}.`)
+
+  const { synced, failed, noServer } = r.events
+  const plural = (n: number) => `${n} Discord event${n === 1 ? '' : 's'}`
+  if (noServer) problems.push("No Discord event: DISCORD_GUILD_ID isn't set.")
+  else if (failed) problems.push(`${plural(failed)} failed: the bot needs the Create Events and Manage Events permissions.`)
+  else if (synced) done.push(`${plural(synced)} up to date.`)
+
+  const { posted, failed: channelFailed } = r.channels
+  if (posted) done.push(`Posted in ${posted} timeslot channel${posted === 1 ? '' : 's'}.`)
+  if (channelFailed) problems.push(`Couldn't post in ${channelFailed} timeslot channel${channelFailed === 1 ? '' : 's'}: ${r.channels.error ?? 'check the bot can view and send messages there'}.`)
+  return { text: [...done, ...problems].join(' '), problem: problems.length > 0 }
+}
+
+const newCar = (sim: Sim): CarDraft => ({ key: uid(), car_name: '', cls: CLASSES[sim][0]!, starts: '', channel: '', driverIds: [] })
 
 export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
   const router = useRouter()
@@ -50,8 +78,20 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
   const [form, setForm] = useState<Form>(BLANK)
   const [cars, setCars] = useState<CarDraft[]>([newCar(sim)])
   const [busy, setBusy] = useState(false)
-  const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
+  const [status, setStatus] = useState<{ kind: 'ok' | 'warn' | 'error'; text: string } | null>(null)
   const [newDriverFor, setNewDriverFor] = useState<string | null>(null)
+  const [channels, setChannels] = useState<{ id: string; name: string }[]>([])
+
+  // The server's text channels, so a car can also post to e.g. #friday-lm24.
+  useEffect(() => {
+    let cancelled = false
+    listDiscordChannels().then((list) => {
+      if (!cancelled) setChannels(list)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const loadRace = useCallback((race: RaceRow | null, forSim: Sim) => {
     if (!race) {
@@ -76,6 +116,8 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
         key: uid(),
         car_name: c.car_name ?? '',
         cls: c.class ?? CLASSES[forSim][0]!,
+        starts: isoToLocalInput(c.starts_at),
+        channel: c.discord_channel_id ?? '',
         driverIds: [...c.race_car_drivers].sort((a, b) => a.sort_order - b.sort_order).map((d) => d.driver_id),
       }))
     setCars(loaded.length ? loaded : [newCar(forSim)])
@@ -119,13 +161,18 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
     setStatus(null)
     const supabase = createClient()
     try {
+      const startsAt = localInputToIso(form.starts)
+      const carStarts = cars.map((c) => localInputToIso(c.starts))
+      const allStarts = [startsAt, ...carStarts].filter((t): t is string => !!t)
       const payload = {
         sim,
         event_name: form.event_name.trim() || null,
         series: form.series.trim() || null,
         track: form.track.trim() || null,
         race_length: form.race_length.trim() || null,
-        starts_at: localInputToIso(form.starts),
+        starts_at: startsAt,
+        // The race stays "next" until its last timeslot has started.
+        last_start_at: allStarts.length ? new Date(Math.max(...allStarts.map(Date.parse))).toISOString() : null,
         stream_url: form.stream_url.trim() || null,
         published: form.published,
       }
@@ -145,7 +192,7 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
       for (const [i, car] of cars.entries()) {
         const { data: inserted, error } = await supabase
           .from('race_cars')
-          .insert({ race_id: id, car_name: car.car_name.trim() || null, class: car.cls, sort_order: i })
+          .insert({ race_id: id, car_name: car.car_name.trim() || null, class: car.cls, starts_at: carStarts[i], discord_channel_id: car.channel || null, sort_order: i })
           .select('id')
           .single()
         if (error) throw error
@@ -157,10 +204,14 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
         }
       }
 
-      await Promise.all([refreshPublicPages(), syncRaceToDiscord(id)])
+      const [, report] = await Promise.all([refreshPublicPages(), syncRaceToDiscord(id)])
       router.refresh()
       await loadRaces(sim, id)
-      setStatus({ kind: 'ok', text: form.published ? 'Saved and live (and updated on Discord).' : 'Saved as a draft (not shown publicly).' })
+      const note = discordNote(report)
+      setStatus({
+        kind: note.problem ? 'warn' : 'ok',
+        text: [form.published ? 'Saved and live on the site.' : 'Saved as a draft (not shown publicly).', note.text].filter(Boolean).join(' '),
+      })
     } catch (e) {
       setStatus({ kind: 'error', text: errorText(e) })
     } finally {
@@ -223,7 +274,8 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
         {cars.map((car) => {
           const available = simDrivers.filter((d) => !car.driverIds.includes(d.id))
           const main = available.filter((d) => d.main_lineup.includes(sim))
-          const others = available.filter((d) => !d.main_lineup.includes(sim))
+          const academy = available.filter((d) => !d.main_lineup.includes(sim) && d.academy)
+          const others = available.filter((d) => !d.main_lineup.includes(sim) && !d.academy)
           return (
             <div key={car.key} className="flex flex-col gap-3 rounded-lg border border-line p-3 sm:p-4">
               <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-2">
@@ -233,13 +285,26 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
                 </select>
                 <button type="button" aria-label="Remove car" className={smallBtn} onClick={() => setCars((cs) => cs.filter((c) => c.key !== car.key))}>✕</button>
               </div>
+              <label className={label}>Timeslot (your time · leave blank for the race&apos;s green flag)
+                <input className={field} type="datetime-local" value={car.starts} onChange={(e) => updateCar(car.key, { starts: e.target.value })} />
+              </label>
+              {(channels.length > 0 || car.channel) && (
+                <label className={label}>Also post this car&apos;s lineup in
+                  <select className={field} value={car.channel} onChange={(e) => updateCar(car.key, { channel: e.target.value })}>
+                    <option value="">Just the lineups channel</option>
+                    {car.channel && !channels.some((c) => c.id === car.channel) && <option value={car.channel}>Saved channel</option>}
+                    {channels.map((c) => <option key={c.id} value={c.id}>#{c.name}</option>)}
+                  </select>
+                </label>
+              )}
               <ul className="flex flex-col">
                 {car.driverIds.map((id) => {
                   const d = byId.get(id)
+                  const badge = d && lineupBadge(d, sim)
                   return (
                     <li key={id} className="flex items-center gap-2 border-b border-mist py-2 last:border-0">
                       <span className="flex-1 font-medium">{d?.name ?? 'Unknown driver'}</span>
-                      {d && !d.main_lineup.includes(sim) && <span className="rounded border border-[#cbd1d9] px-1.5 text-[11px] font-semibold">GUEST</span>}
+                      {badge && <span className={`rounded border px-1.5 text-[11px] font-semibold ${badge === 'ACADEMY' ? 'border-iris-deep text-iris-deep' : 'border-[#cbd1d9]'}`}>{badge}</span>}
                       <button type="button" aria-label={`Remove ${d?.name ?? 'driver'}`} className={smallBtn} onClick={() => updateCar(car.key, { driverIds: car.driverIds.filter((x) => x !== id) })}>✕</button>
                     </li>
                   )
@@ -260,6 +325,11 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
                   <optgroup label={`${SIM_SHORT[sim]} main lineup`}>
                     {main.map((d) => <option key={d.id} value={d.id}>{d.name}{d.role_tag ? ` · ${d.role_tag}` : ''}</option>)}
                   </optgroup>
+                  {academy.length > 0 && (
+                    <optgroup label="Academy drivers">
+                      {academy.map((d) => <option key={d.id} value={d.id}>{d.name}{d.sims.includes(sim) ? '' : ` (not usually ${SIM_SHORT[sim]})`}</option>)}
+                    </optgroup>
+                  )}
                   <optgroup label="Reserves, guests and other drivers">
                     {others.map((d) => <option key={d.id} value={d.id}>{d.name}{d.sims.includes(sim) ? '' : ` (not usually ${SIM_SHORT[sim]})`}</option>)}
                   </optgroup>
@@ -296,7 +366,7 @@ export default function RaceEditor({ sim: fixedSim }: { sim?: Sim }) {
         </div>
       </div>
       {status && (
-        <p role="status" className={status.kind === 'ok' ? 'text-sm text-ice-deep' : 'text-sm text-[#8a1c1c]'}>{status.text}</p>
+        <p role="status" className={`text-sm ${{ ok: 'text-ice-deep', warn: 'text-ember-deep', error: 'text-[#8a1c1c]' }[status.kind]}`}>{status.text}</p>
       )}
     </div>
   )
@@ -307,6 +377,7 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
   const [nickname, setNickname] = useState('')
   const [country, setCountry] = useState('US')
   const [main, setMain] = useState(false)
+  const [academy, setAcademy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -315,8 +386,8 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
     setBusy(true)
     const { data, error } = await createClient()
       .from('drivers')
-      .insert({ name: name.trim(), nickname: nickname.trim() || null, country_code: country || null, sims: [sim], main_lineup: main ? [sim] : [] })
-      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, archived, sort_order, profile_id')
+      .insert({ name: name.trim(), nickname: nickname.trim() || null, country_code: country || null, sims: [sim], main_lineup: main ? [sim] : [], academy })
+      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on, archived, sort_order, profile_id')
       .single()
     setBusy(false)
     if (error) return setError(errorText(error))
@@ -339,6 +410,10 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
       <label className="flex min-h-11 items-center gap-2 text-sm">
         <input type="checkbox" checked={main} onChange={(e) => setMain(e.target.checked)} className="h-5 w-5" />
         Also add to the {SIM_SHORT[sim]} main lineup
+      </label>
+      <label className="flex min-h-11 items-center gap-2 text-sm">
+        <input type="checkbox" checked={academy} onChange={(e) => setAcademy(e.target.checked)} className="h-5 w-5" />
+        Academy driver (shown as ACADEMY instead of GUEST)
       </label>
       {error && <p className="text-sm text-[#8a1c1c]">{error}</p>}
       <div className="flex gap-2">

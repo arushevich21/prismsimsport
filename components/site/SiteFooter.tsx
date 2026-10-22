@@ -1,6 +1,6 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { DISCORD_INVITE_URL, PARTNERS } from '@/lib/site'
+import { DISCORD_INVITE_URL, TITLE_SPONSOR } from '@/lib/site'
 
 export function SiteFooter() {
   return (
@@ -24,9 +24,9 @@ export function SiteFooter() {
           <span className="flex flex-wrap items-center gap-x-3 gap-y-2">
             <span>© {new Date().getFullYear()} PRISM Sim Sport</span>
             <span aria-hidden="true">·</span>
-            <a href={PARTNERS.cube.url} className="inline-flex items-center gap-2.5 hover:text-white">
-              Supported by
-              <Image src="/brand/cube-controls-white.png" alt="Cube Controls" width={1137} height={290} className="h-6 w-auto" />
+            <a href={TITLE_SPONSOR.url} className="inline-flex items-center gap-2.5 hover:text-white">
+              Sponsored by
+              <Image src={TITLE_SPONSOR.logo.src} alt={TITLE_SPONSOR.name} width={TITLE_SPONSOR.logo.width} height={TITLE_SPONSOR.logo.height} className="h-5 w-auto" />
             </a>
           </span>
           <span className="font-mono">prismsimsport.app</span>

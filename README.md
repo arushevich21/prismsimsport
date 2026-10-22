@@ -33,7 +33,7 @@ Sign in as an admin and an indigo bar appears under the header on every public p
 - Students: `/dashboard`, `/sessions` (book via Cal.com, pay by PayPal/Zelle), `/messages` (live chat with their coach), `/telemetry`, `/library`, `/setups`.
 - Coaches: `/coach` queue (applications for admins, telemetry to review, unanswered messages, sessions to mark paid or wrap up), `/coach/students`, `/coach/messages`, `/coach/settings` (Cal.com username, PayPal.me, Zelle). Admins also get `/coach/library` for videos and setup files.
 - Applying: `/apply` → `/pending` → approved in the coach queue (assign coach + tier).
-- Cal.com: add a webhook to `https://prismsimsport.app/api/cal/webhook` with the `CAL_WEBHOOK_SECRET` secret and the Booking created / rescheduled / cancelled triggers. Each coach needs event types `coaching-30`, `coaching-60`, `coaching-90`.
+- Cal.com: add a webhook to `https://www.prismsimsport.app/api/cal/webhook` with the `CAL_WEBHOOK_SECRET` secret and the Booking created / rescheduled / cancelled triggers. Each coach needs event types `coaching-30`, `coaching-60`, `coaching-90`.
 
 ## Discord
 

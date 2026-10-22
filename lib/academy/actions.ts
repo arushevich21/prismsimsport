@@ -6,11 +6,12 @@ import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
 import {
   notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
-  onCoachAdded, onStudentApproved, onStudentRemoved,
+  onCoachAdded, onStudentProgramChanged, onStudentRemoved,
 } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { TELEMETRY_EXTENSIONS, TIERS, type Tier } from './constants'
+import { PROGRAM_LABEL, TELEMETRY_EXTENSIONS, TIERS, isProgram, type Tier } from './constants'
+import { approveInquiry, declineInquiry } from './decisions'
 
 // Every action re-checks who is calling. RLS is the backstop for the ones that
 // run as the user; the few that need the service role check permissions here.
@@ -42,25 +43,39 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
   const goals = str(fd, 'goals')
   const experience = str(fd, 'experience')
   const carSeries = str(fd, 'car_series') || null
+  const program = str(fd, 'program')
+  if (!isProgram(program)) return fail('Please choose a program: LMU, ACC or both.')
   if (!improve || !goals || !experience) return fail('Please answer the first three questions.')
   if ([improve, goals, experience, carSeries ?? ''].some((v) => v.length > MAX_ANSWER)) return fail('One of your answers is too long.')
 
   const admin = createAdminClient()
-  const { data: existing } = await admin.from('inquiries').select('id').eq('user_id', viewer.user.id).maybeSingle()
-  if (!existing) {
+  const { data: existing } = await admin.from('inquiries').select('id, status').eq('user_id', viewer.user.id).maybeSingle()
+  // One application per person. A pending one stays as it is; a declined one
+  // (or one from a student who was later removed) is reopened with the new
+  // answers, and gets a fresh Discord ticket.
+  if (existing?.status !== 'pending') {
     const discordHandle = displayName(viewer)
-    const { error } = await admin.from('inquiries').insert({
-      user_id: viewer.user.id,
+    const answers = {
       email: viewer.user.email ?? null,
       discord_handle: discordHandle,
       improve,
       goals,
       experience,
       car_series: carSeries,
-    })
+      program,
+    }
+    const { data: inserted, error } = existing
+      ? await admin
+          .from('inquiries')
+          .update({ ...answers, status: 'pending', decided_at: null, created_at: new Date().toISOString(), discord_channel_id: null })
+          .eq('id', existing.id)
+          .select('id')
+          .single()
+      : await admin.from('inquiries').insert({ user_id: viewer.user.id, ...answers }).select('id').single()
     if (error) return fail('Could not save your application. Please try again.')
     after(() =>
-      notifyNewApplication(discordHandle, [
+      notifyNewApplication({ inquiryId: inserted.id as string, applicantId: viewer.user.id, name: discordHandle }, [
+        { name: 'Program', value: PROGRAM_LABEL[program] },
         { name: 'What to improve', value: improve },
         { name: 'Goals', value: goals },
         { name: 'Experience', value: experience },
@@ -74,35 +89,17 @@ export async function applyForCoaching(_prev: Result | null, fd: FormData): Prom
 export async function approveApplication(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
-  const id = str(fd, 'id')
-  const coachId = str(fd, 'coach_id') || null
   const tier = str(fd, 'tier') as Tier
-  if (!TIERS.includes(tier)) return
-
-  const admin = createAdminClient()
-  const { data: inquiry } = await admin.from('inquiries').select('user_id').eq('id', id).maybeSingle()
-  if (!inquiry) return
-  await admin.from('students').upsert({ profile_id: inquiry.user_id, coach_id: coachId, tier })
-  await admin.from('profiles').update({ role: 'student' }).eq('id', inquiry.user_id).eq('role', 'member')
-  await admin.from('inquiries').update({ status: 'approved', decided_at: new Date().toISOString() }).eq('id', id)
-  // Keep the legacy flag in step until the old tables are retired.
-  await admin.from('members').update({ active: true, tier }).eq('user_id', inquiry.user_id)
-  after(async () => {
-    const { data: coach } = coachId
-      ? await admin.from('profiles').select('display_name, discord_username').eq('id', coachId).maybeSingle()
-      : { data: null }
-    await onStudentApproved(inquiry.user_id, coach ? coach.display_name || coach.discord_username : null)
-  })
+  const program = str(fd, 'program')
+  if (!TIERS.includes(tier) || !isProgram(program)) return
+  await approveInquiry(str(fd, 'id'), str(fd, 'coach_id') || null, tier, program)
   revalidatePath('/coach', 'layout')
 }
 
 export async function declineApplication(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
-  await createAdminClient()
-    .from('inquiries')
-    .update({ status: 'declined', decided_at: new Date().toISOString() })
-    .eq('id', str(fd, 'id'))
+  await declineInquiry(str(fd, 'id'))
   revalidatePath('/coach', 'layout')
 }
 
@@ -112,11 +109,15 @@ export async function updateStudent(fd: FormData): Promise<void> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return
   const tier = str(fd, 'tier') as Tier
+  const programValue = str(fd, 'program')
+  const program = isProgram(programValue) ? programValue : null
   if (!TIERS.includes(tier)) return
-  await createAdminClient()
-    .from('students')
-    .update({ tier, coach_id: str(fd, 'coach_id') || null })
-    .eq('profile_id', str(fd, 'profile_id'))
+  const profileId = str(fd, 'profile_id')
+  const admin = createAdminClient()
+  const { data: before } = await admin.from('students').select('program').eq('profile_id', profileId).maybeSingle()
+  await admin.from('students').update({ tier, coach_id: str(fd, 'coach_id') || null, program }).eq('profile_id', profileId)
+  // A new program means different Discord roles (LMU Academy / ACC Academy).
+  if (before && before.program !== program) after(() => onStudentProgramChanged(profileId, program))
   revalidatePath('/coach', 'layout')
 }
 
