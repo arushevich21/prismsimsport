@@ -18,6 +18,7 @@ export default async function AcademyLayout({ children }: { children: React.Reac
     { href: '/telemetry', label: 'Telemetry' },
     { href: '/library', label: 'Video library' },
     { href: '/setups', label: 'Setups' },
+    { href: '/profile', label: 'My profile' },
     ...(staff ? [{ href: '/coach', label: 'Coach queue →' }] : []),
   ]
 

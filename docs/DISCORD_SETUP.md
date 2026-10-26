@@ -14,12 +14,15 @@ Until `DISCORD_BOT_TOKEN` is set, everything falls back to the old webhooks (`DI
 | An admin clicks **Approve for LMU / ACC / both** or **Decline** on an application (in the ticket or the staff channel) | Same as approving or declining in the coach queue. Approving makes the admin who clicked the student's coach, on the default tier, in the program clicked. Admins only; the buttons are replaced with who decided. |
 | An application is declined | A note in their ticket, which becomes read-only for them. |
 | Telemetry upload / new Cal.com booking | DM to the student's coach. |
-| An application is approved | A note in their ticket (then read-only for them), the **Academy** role, plus **LMU Academy** and/or **ACC Academy** for their program, and a welcome DM. Changing a student's program on the site swaps those roles; removed students lose all of them. |
+| An application is approved | A note in their ticket (then read-only for them), the **LMU Academy** and/or **ACC Academy** role for their program, and a welcome DM. Changing a student's program on the site swaps those roles; moving them up to the **Driver** or **Elite** tier swaps LMU / ACC Academy for **LMU Driver** / **ACC Driver**; removed students lose all of them. |
 | Someone is made a coach | **Coach** role. |
 | A coach flags a student team-ready | Post in the captains channel. |
 | A race is saved in edit mode | Lineup posted (then edited in place) in the lineups channel with the 9:16 lineup graphic, linked drivers mentioned, plus one Discord **scheduled event** per timeslot. A car can also have its lineup posted in its own channel (e.g. `#friday-lm24`), picked in the race editor. Unpublishing or deleting removes all of it. The editor says exactly what was posted and what's missing. |
 | Results are saved | New results posted once in the results channel with a results graphic (tick box in the editor; up to six per post, the rest go out on the next save). |
-| The roster is saved | Linked drivers get or lose the **LMU Driver** / **ACC Driver** role to match the main lineups. Link a driver to their account in the roster editor. |
+| The roster is saved | Linked drivers get or lose the **LMU Driver** / **ACC Driver** role to match the main lineups. Link a driver to their account in the roster editor. Students on the Driver or Elite tier keep their Driver role either way. |
+| Someone picks their main classes on `/profile` (two at most) | The matching class roles (**HY**, **LMP2**, **LMP3** and **GT3**); unticked ones are taken away. |
+| Someone sets their first and last name on `/profile` | Their server nickname becomes that name (blank clears it). Bots can't rename the server owner or anyone with a role above the bot's; the page tells them. |
+| Someone signs in | Their site-managed roles are brought up to date, for anything they missed while not in the server. |
 | Someone signs in (optional) | Added to the server automatically (`NEXT_PUBLIC_DISCORD_AUTO_JOIN=true`). |
 
 ## 1. Create the app and bot
@@ -34,14 +37,14 @@ Until `DISCORD_BOT_TOKEN` is set, everything falls back to the old webhooks (`DI
 Open this link with your Application ID filled in:
 
 ```
-https://discord.com/oauth2/authorize?client_id=APPLICATION_ID&scope=bot&permissions=17601044532240
+https://discord.com/oauth2/authorize?client_id=APPLICATION_ID&scope=bot&permissions=17601178749968
 ```
 
-That grants only: View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Manage Channels (for application tickets), Manage Roles, Create Events, Manage Events.
+That grants only: View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Manage Channels (for application tickets), Manage Roles, Manage Nicknames (for names set on `/profile`), Create Events, Manage Events.
 
-**Already invited the bot with the older link?** Open the link above again and authorize; Discord updates the bot's permissions in place. (Or give the bot's role **Manage Channels** and **Attach Files** in Server Settings → Roles.)
+**Already invited the bot with the older link?** Open the link above again and authorize; Discord updates the bot's permissions in place. (Or give the bot's role **Manage Channels**, **Attach Files** and **Manage Nicknames** in Server Settings → Roles.)
 
-Then in **Server Settings → Roles**, drag the bot's role **above** Academy, LMU Academy, ACC Academy, Coach, LMU Driver and ACC Driver. Discord only lets a bot hand out roles below its own.
+Then in **Server Settings → Roles**, drag the bot's role **above** LMU Academy, ACC Academy, Coach, LMU Driver, ACC Driver and the class roles. Discord only lets a bot hand out roles below its own.
 
 ## 3. Copy the IDs
 
@@ -54,12 +57,15 @@ Turn on **User Settings → Advanced → Developer Mode**, then right-click → 
 | `DISCORD_BOT_TOKEN` | Bot token from step 1 |
 | `DISCORD_PUBLIC_KEY` | Public key from step 1 |
 | `DISCORD_GUILD_ID` | Server ID |
-| `DISCORD_ROLE_ACADEMY` | Academy role ID (every academy student) |
 | `DISCORD_ROLE_ACADEMY_LMU` | LMU Academy role ID (coached by PRISM, races for PRISM in LMU; give it the team chat) |
 | `DISCORD_ROLE_ACADEMY_ACC` | ACC Academy role ID (coached by PRISM, races with Falcon in ACC; give it the ACC / Falcon channel) |
 | `DISCORD_ROLE_COACH` | Coach role ID |
 | `DISCORD_ROLE_LMU_DRIVER` | LMU Driver role ID |
 | `DISCORD_ROLE_ACC_DRIVER` | ACC Driver role ID |
+| `DISCORD_ROLE_CLASS_HY` | Hypercar class role ID |
+| `DISCORD_ROLE_CLASS_LMP2` | LMP2 class role ID |
+| `DISCORD_ROLE_CLASS_LMP3` | LMP3 class role ID |
+| `DISCORD_ROLE_CLASS_GT3` | GT3 class role ID (LMU's LMGT3 and ACC's GT3) |
 | `DISCORD_CHANNEL_LINEUPS` | Channel for race lineups |
 | `DISCORD_CHANNEL_RESULTS` | Channel for results |
 | `DISCORD_CHANNEL_STAFF` | Private coaches/admin channel (applications) |
@@ -91,15 +97,15 @@ Discord sends a test request when you save; it only saves if the site answers co
 
 A starting point; adjust to taste.
 
-**Roles** (bot role above the four it manages)
+**Roles** (bot role above the ones it manages)
 - `Founder` / `Admin`
 - `Team Captain`
 - `Coach` *(managed by the site)*
 - `LMU Driver` *(managed by the site)*
 - `ACC Driver` *(managed by the site; Falcon Motorsport program)*
-- `Academy` *(managed by the site; every student)*
 - `LMU Academy` *(managed by the site; coached by PRISM, races for PRISM)*
 - `ACC Academy` *(managed by the site; coached by PRISM, races with Falcon)*
+- `HY` / `LMP2` / `LMP3` / `GT3` *(managed by the site; picked on their profile. Role icons need server boost level 2)*
 - `Member` *(everyone else)*
 
 **Channels**
@@ -108,6 +114,6 @@ A starting point; adjust to taste.
 - `#results`: bot posts results (read-only for members)
 - `#lmu` / `#acc`: chat per sim
 - `#setups-and-replays`
-- `#academy`: visible to `Academy` + `Coach`
+- `#academy`: visible to `LMU Academy`, `ACC Academy` + `Coach`
 - `#coaching-staff`: private, `Coach` + admins (set as `DISCORD_CHANNEL_STAFF`)
 - `#captains`: private, captains + admins (set as `DISCORD_CHANNEL_CAPTAINS`)

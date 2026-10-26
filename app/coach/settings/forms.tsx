@@ -35,14 +35,18 @@ export function CoachSettingsForm({ coach }: { coach: Coach }) {
   )
 }
 
-export function AddCoachForm() {
+// Pick from everyone who has signed in and isn't a coach yet.
+export function AddCoachForm({ people }: { people: { id: string; label: string }[] }) {
   const [state, action] = useActionState(addCoach, null)
   return (
     <form action={action} className="flex flex-col gap-3">
-      <label className={labelCls}>Their Discord username or display name
-        <input name="handle" required placeholder="e.g. adamk" className={field} />
+      <label className={labelCls}>Who
+        <select name="profile_id" required defaultValue="" className={field}>
+          <option value="" disabled>Choose someone who has signed in…</option>
+          {people.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+        </select>
       </label>
-      <p className="text-sm text-muted">They need to have signed in to the site once.</p>
+      <p className="text-sm text-muted">Not in the list? They need to sign in to the site once with Discord.</p>
       <div className="flex flex-wrap items-center gap-3">
         <SubmitButton className={primary}>Make coach</SubmitButton>
         {state && <span role="status" className={`text-sm ${state.ok ? 'text-ice-deep' : 'text-[#8a1c1c]'}`}>{state.ok ? 'Done. They now have the coach view.' : state.error}</span>}

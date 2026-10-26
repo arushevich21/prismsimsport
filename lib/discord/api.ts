@@ -1,4 +1,5 @@
 import 'server-only'
+import type { MainClass } from '@/lib/types'
 
 // Minimal Discord REST client for the PRISM bot. No gateway connection: the
 // site calls Discord when something happens, and Discord calls
@@ -10,12 +11,18 @@ export const discordEnv = {
   token: process.env.DISCORD_BOT_TOKEN,
   guildId: process.env.DISCORD_GUILD_ID,
   roles: {
-    academy: process.env.DISCORD_ROLE_ACADEMY, // every academy student
     academyLmu: process.env.DISCORD_ROLE_ACADEMY_LMU, // races for PRISM in LMU
     academyAcc: process.env.DISCORD_ROLE_ACADEMY_ACC, // races with Falcon in ACC
     coach: process.env.DISCORD_ROLE_COACH,
     lmu: process.env.DISCORD_ROLE_LMU_DRIVER,
     acc: process.env.DISCORD_ROLE_ACC_DRIVER,
+    // The classes people mainly drive, picked on their profile.
+    classes: {
+      hy: process.env.DISCORD_ROLE_CLASS_HY,
+      lmp2: process.env.DISCORD_ROLE_CLASS_LMP2,
+      lmp3: process.env.DISCORD_ROLE_CLASS_LMP3,
+      gt3: process.env.DISCORD_ROLE_CLASS_GT3,
+    } satisfies Record<MainClass, string | undefined>,
   },
   channels: {
     lineups: process.env.DISCORD_CHANNEL_LINEUPS,
@@ -137,6 +144,29 @@ export function setMemberRole(discordUserId: string, roleId: string | undefined,
   return discord(on ? 'PUT' : 'DELETE', `/guilds/${discordEnv.guildId}/members/${discordUserId}/roles/${roleId}`, undefined, {
     'X-Audit-Log-Reason': 'PRISM website sync',
   })
+}
+
+// Gives or takes each role so the member matches `wanted`, touching only the
+// roles that differ. Does nothing for someone who isn't in the server.
+export async function setMemberRoles(discordUserId: string, wanted: [roleId: string | undefined, on: boolean][]) {
+  if (!discordEnv.guildId) return
+  const member = await discord<{ roles: string[] }>('GET', `/guilds/${discordEnv.guildId}/members/${discordUserId}`)
+  if (!member) return
+  for (const [roleId, on] of wanted) {
+    if (roleId && member.roles.includes(roleId) !== on) await setMemberRole(discordUserId, roleId, on)
+  }
+}
+
+// Their nickname in the PRISM server (null clears it). Discord won't let a bot
+// rename the server owner or anyone whose top role is above the bot's.
+export function setNickname(discordUserId: string, nick: string | null) {
+  if (!discordEnv.guildId) return Promise.resolve(null)
+  return discord('PATCH', `/guilds/${discordEnv.guildId}/members/${discordUserId}`, { nick }, { 'X-Audit-Log-Reason': 'PRISM website profile' })
+}
+
+export async function isGuildMember(discordUserId: string) {
+  if (!discordEnv.guildId) return false
+  return !!(await discord('GET', `/guilds/${discordEnv.guildId}/members/${discordUserId}`))
 }
 
 // Adds a user to the server using the OAuth token from their Discord sign-in

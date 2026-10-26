@@ -46,14 +46,22 @@ export const SUPPORTERS: Sponsor[] = [
   },
 ]
 
-// Class colour chips. Light fills with dark text, so they pass contrast.
+// Class colours: Hypercar red, LMP2 orange, LMP3 purple, GT3 green. Light
+// fills with dark text, so they pass contrast. The graphics use CLASS_HEX;
+// keep the two in step (Tailwind needs the literal class names).
+export const CLASS_HEX: Record<string, string> = {
+  hypercar: '#ff9e98',
+  lmp2: '#ffb678',
+  lmp3: '#c9a8f7',
+  lmgt3: '#95dba5',
+  gt3: '#95dba5',
+}
 const CLASS_CHIP: Record<string, string> = {
-  hypercar: 'bg-ice',
-  lmp2: 'bg-iris',
-  lmp3: 'bg-iris',
-  lmgt3: 'bg-ember',
-  gt3: 'bg-ember',
-  gt4: 'bg-iris',
+  hypercar: 'bg-[#ff9e98]',
+  lmp2: 'bg-[#ffb678]',
+  lmp3: 'bg-[#c9a8f7]',
+  lmgt3: 'bg-[#95dba5]',
+  gt3: 'bg-[#95dba5]',
 }
 
 export function classChip(cls: string | null | undefined) {

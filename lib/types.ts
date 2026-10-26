@@ -11,8 +11,21 @@ export const SIM_SHORT: Record<Sim, string> = { lmu: 'LMU', acc: 'ACC' }
 
 export const CLASSES: Record<Sim, string[]> = {
   lmu: ['Hypercar', 'LMP2', 'LMP3', 'LMGT3'],
-  acc: ['GT3', 'GT4'],
+  acc: ['GT3'],
 }
+
+// The classes someone can say they mainly drive, on their profile. Each one
+// has a Discord role. LMU's LMGT3 and ACC's GT3 share the GT3 role.
+export const MAIN_CLASSES = ['hy', 'lmp2', 'lmp3', 'gt3'] as const
+export type MainClass = (typeof MAIN_CLASSES)[number]
+export const MAIN_CLASS_LABEL: Record<MainClass, string> = { hy: 'Hypercar', lmp2: 'LMP2', lmp3: 'LMP3', gt3: 'GT3' }
+export const MAX_MAIN_CLASSES = 2
+// The team page's class name for each main class, per sim.
+export const MAIN_CLASS_IN_SIM: Record<Sim, Partial<Record<MainClass, string>>> = {
+  lmu: { hy: 'Hypercar', lmp2: 'LMP2', lmp3: 'LMP3', gt3: 'LMGT3' },
+  acc: { gt3: 'GT3' },
+}
+export const isMainClass = (v: string): v is MainClass => (MAIN_CLASSES as readonly string[]).includes(v)
 
 export function isSim(value: string): value is Sim {
   return value === 'lmu' || value === 'acc'

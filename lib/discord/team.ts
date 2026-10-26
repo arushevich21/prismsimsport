@@ -1,10 +1,11 @@
 import 'server-only'
+import { syncTeamRoles } from './roles'
 import { SITE_URL } from '@/lib/site'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { SIM_LABEL, SIM_SHORT, carStart, lineupBadge, raceSlots, type Sim } from '@/lib/types'
 import {
   COLORS, botEnabled, clip, deleteChannelMessage, deleteScheduledEvent, discordEnv, editChannelMessage, flagEmoji,
-  postToChannel, setMemberRole, takeDiscordError, timestamp, upsertScheduledEvent, type MessagePayload,
+  postToChannel, takeDiscordError, timestamp, upsertScheduledEvent, type MessagePayload,
 } from './api'
 
 // Keeps Discord in step with the team data the admin edits on the site.
@@ -288,21 +289,10 @@ export async function announceNewResults(sim: Sim, season: number) {
 }
 
 // Gives linked drivers the LMU / ACC driver role when they're on that main
-// lineup, and takes it away when they're not (or archived).
+// lineup, and takes it away when they're not (or archived), unless they've
+// moved up to Driver in the academy.
 export async function syncDriverRoles() {
   if (!botEnabled()) return
-  const admin = createAdminClient()
-  const { data: drivers } = await admin.from('drivers').select('profile_id, main_lineup, archived').not('profile_id', 'is', null)
-  const ids = (drivers ?? []).map((d) => d.profile_id as string)
-  if (ids.length === 0) return
-  const { data: profiles } = await admin.from('profiles').select('id, discord_id').in('id', ids)
-  const discordOf = new Map((profiles ?? []).map((p) => [p.id as string, p.discord_id as string | null]))
-
-  for (const d of drivers ?? []) {
-    const discordId = discordOf.get(d.profile_id as string)
-    if (!discordId) continue
-    const lineup = (d.archived ? [] : d.main_lineup) as Sim[]
-    await setMemberRole(discordId, discordEnv.roles.lmu, lineup.includes('lmu'))
-    await setMemberRole(discordId, discordEnv.roles.acc, lineup.includes('acc'))
-  }
+  const { data: drivers } = await createAdminClient().from('drivers').select('profile_id').not('profile_id', 'is', null)
+  await syncTeamRoles([...new Set((drivers ?? []).map((d) => d.profile_id as string))])
 }

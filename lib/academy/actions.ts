@@ -6,7 +6,7 @@ import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
 import {
   notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
-  onCoachAdded, onStudentProgramChanged, onStudentRemoved,
+  onCoachAdded, onStudentChanged,
 } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -114,10 +114,10 @@ export async function updateStudent(fd: FormData): Promise<void> {
   if (!TIERS.includes(tier)) return
   const profileId = str(fd, 'profile_id')
   const admin = createAdminClient()
-  const { data: before } = await admin.from('students').select('program').eq('profile_id', profileId).maybeSingle()
+  const { data: before } = await admin.from('students').select('tier, program').eq('profile_id', profileId).maybeSingle()
   await admin.from('students').update({ tier, coach_id: str(fd, 'coach_id') || null, program }).eq('profile_id', profileId)
-  // A new program means different Discord roles (LMU Academy / ACC Academy).
-  if (before && before.program !== program) after(() => onStudentProgramChanged(profileId, program))
+  // A new program or tier means different Discord roles (LMU Academy → LMU Driver…).
+  if (before && (before.program !== program || before.tier !== tier)) after(() => onStudentChanged(profileId))
   revalidatePath('/coach', 'layout')
 }
 
@@ -145,7 +145,7 @@ export async function removeStudent(fd: FormData): Promise<void> {
   await admin.from('students').delete().eq('profile_id', id)
   await admin.from('profiles').update({ role: 'member' }).eq('id', id).eq('role', 'student')
   await admin.from('members').update({ active: false }).eq('user_id', id)
-  after(() => onStudentRemoved(id))
+  after(() => onStudentChanged(id))
   revalidatePath('/coach', 'layout')
 }
 
@@ -321,19 +321,11 @@ export async function saveCoachSettings(_prev: Result | null, fd: FormData): Pro
 export async function addCoach(_prev: Result | null, fd: FormData): Promise<Result> {
   const viewer = await getViewer()
   if (viewer?.role !== 'admin') return fail('Admins only.')
-  const handle = str(fd, 'handle').replace(/^@/, '')
-  if (!handle) return fail('Enter their Discord username or display name.')
-  // Goes into a PostgREST filter, so only plain name characters are allowed.
-  if (!/^[\w .#-]{2,40}$/.test(handle)) return fail('Use letters, numbers, spaces, dots, dashes or underscores only.')
+  const profileId = str(fd, 'profile_id')
+  if (!profileId) return fail('Choose who to make a coach.')
   const admin = createAdminClient()
-  const { data: matches } = await admin
-    .from('profiles')
-    .select('id, role')
-    .or(`discord_username.ilike.${handle},display_name.ilike.${handle}`)
-    .limit(2)
-  if (!matches?.length) return fail('No one with that name has signed in yet. Ask them to sign in once, then try again.')
-  if (matches.length > 1) return fail('More than one person matches. Use their exact Discord username.')
-  const person = matches[0]!
+  const { data: person } = await admin.from('profiles').select('id, role').eq('id', profileId).maybeSingle()
+  if (!person) return fail('That account no longer exists.')
   if (person.role !== 'admin') await admin.from('profiles').update({ role: 'coach' }).eq('id', person.id)
   await admin.from('coaches').upsert({ profile_id: person.id, title: 'Coach' }, { onConflict: 'profile_id', ignoreDuplicates: true })
   after(() => onCoachAdded(person.id))
