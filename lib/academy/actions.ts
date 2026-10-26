@@ -6,7 +6,7 @@ import { after } from 'next/server'
 import { getViewer, type Viewer } from '@/lib/auth'
 import {
   notifyCoachesOfMessage, notifyNewApplication, notifyStudentOfReply, notifyTeamReady, notifyTelemetry,
-  onCoachAdded, onStudentProgramChanged, onStudentRemoved,
+  onCoachAdded, onStudentChanged,
 } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -114,10 +114,10 @@ export async function updateStudent(fd: FormData): Promise<void> {
   if (!TIERS.includes(tier)) return
   const profileId = str(fd, 'profile_id')
   const admin = createAdminClient()
-  const { data: before } = await admin.from('students').select('program').eq('profile_id', profileId).maybeSingle()
+  const { data: before } = await admin.from('students').select('tier, program').eq('profile_id', profileId).maybeSingle()
   await admin.from('students').update({ tier, coach_id: str(fd, 'coach_id') || null, program }).eq('profile_id', profileId)
-  // A new program means different Discord roles (LMU Academy / ACC Academy).
-  if (before && before.program !== program) after(() => onStudentProgramChanged(profileId, program))
+  // A new program or tier means different Discord roles (LMU Academy → LMU Driver…).
+  if (before && (before.program !== program || before.tier !== tier)) after(() => onStudentChanged(profileId))
   revalidatePath('/coach', 'layout')
 }
 
@@ -145,7 +145,7 @@ export async function removeStudent(fd: FormData): Promise<void> {
   await admin.from('students').delete().eq('profile_id', id)
   await admin.from('profiles').update({ role: 'member' }).eq('id', id).eq('role', 'student')
   await admin.from('members').update({ active: false }).eq('user_id', id)
-  after(() => onStudentRemoved(id))
+  after(() => onStudentChanged(id))
   revalidatePath('/coach', 'layout')
 }
 

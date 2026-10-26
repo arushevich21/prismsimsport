@@ -1,5 +1,5 @@
 import { carMake } from '@/lib/cars'
-import { TITLE_SPONSOR } from '@/lib/site'
+import { CLASS_HEX, TITLE_SPONSOR } from '@/lib/site'
 
 // Pieces shared by the graphics the bot posts to Discord (lineups, results):
 // PRISM colours, fonts and the common header/footer. Rendered with next/og;
@@ -16,7 +16,6 @@ export const C = {
   iris: '#a5a8f7',
   ember: '#ffb678',
 }
-export const CLASS_COLOR: Record<string, string> = { hypercar: C.ice, lmp2: C.iris, lmp3: C.iris, gt4: C.iris, lmgt3: C.ember, gt3: C.ember }
 
 const FONTS = [
   { name: 'Unbounded', file: 'unbounded-latin-700-normal.woff', weight: 700 },
@@ -46,7 +45,7 @@ export function loadFonts(origin: string) {
   return fontCache
 }
 
-export const classColor = (cls: string) => CLASS_COLOR[cls.toLowerCase().replace(/\s+/g, '')] ?? '#e4e7ec'
+export const classColor = (cls: string) => CLASS_HEX[cls.toLowerCase().replace(/\s+/g, '')] ?? '#e4e7ec'
 
 export function ClassChip({ cls, size = 20 }: { cls: string; size?: number }) {
   return (

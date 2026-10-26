@@ -1,6 +1,7 @@
 import { after, NextResponse } from 'next/server'
 import { homeFor, type Role } from '@/lib/auth'
 import { addGuildMember } from '@/lib/discord/api'
+import { syncClassRoles, syncTeamRoles } from '@/lib/discord/roles'
 import { createClient } from '@/lib/supabase/server'
 
 // Discord sends the user back here with a one-time code. Exchanging it on the
@@ -17,9 +18,13 @@ export async function GET(request: Request) {
       // Optional: add them to the PRISM server (sign-in asks for guilds.join).
       const token = data.session?.provider_token
       const discordId = data.user?.user_metadata?.provider_id as string | undefined
-      if (process.env.NEXT_PUBLIC_DISCORD_AUTO_JOIN === 'true' && token && discordId) {
-        after(() => addGuildMember(discordId, token))
-      }
+      const autoJoin = process.env.NEXT_PUBLIC_DISCORD_AUTO_JOIN === 'true' && token && discordId
+      const userId = data.user?.id
+      after(async () => {
+        if (autoJoin) await addGuildMember(discordId, token)
+        // Catch up on roles they couldn't get while they weren't in the server.
+        if (userId) await Promise.all([syncTeamRoles([userId]), syncClassRoles(userId)])
+      })
       if (next) return NextResponse.redirect(`${origin}${next}`)
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user?.id ?? '').maybeSingle()
       return NextResponse.redirect(`${origin}${homeFor((profile?.role as Role | undefined) ?? 'member')}`)

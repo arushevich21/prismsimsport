@@ -1,7 +1,8 @@
 import 'server-only'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { createPublicClient } from '@/lib/supabase/public'
 import { DISCORD_INVITE_URL } from '@/lib/site'
-import type { Driver, Race, RaceCar, Result, Sim } from '@/lib/types'
+import { MAIN_CLASS_IN_SIM, type Driver, type MainClass, type Race, type RaceCar, type Result, type Sim } from '@/lib/types'
 
 // Public data for the marketing pages. Every function returns an empty value
 // on failure, so a database hiccup degrades a section instead of the page.
@@ -116,11 +117,13 @@ export async function getMainLineup(sim: Sim): Promise<Driver[]> {
 }
 
 // Academy drivers who race in this sim, whether or not they've been in a lineup yet.
+// Academy drivers with no class set in the roster go under the first class
+// they picked on their profile, if it's one this sim races.
 export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
   const supabase = createPublicClient()
   const { data, error } = await supabase
     .from('drivers')
-    .select(DRIVER_COLUMNS)
+    .select(`${DRIVER_COLUMNS}, profile_id`)
     .eq('academy', true)
     .contains('sims', [sim])
     .not('main_lineup', 'cs', `{${sim}}`)
@@ -131,7 +134,18 @@ export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
     console.error('[data] academy drivers:', error.message)
     return []
   }
-  return (data ?? []) as Driver[]
+  const drivers = (data ?? []) as (Driver & { profile_id: string | null })[]
+  const unclassed = drivers.filter((d) => !d.academy_class && d.profile_id).map((d) => d.profile_id!)
+  // Profiles aren't public, so this reads only main_classes with the service role.
+  const { data: profiles } = unclassed.length
+    ? await createAdminClient().from('profiles').select('id, main_classes').in('id', unclassed)
+    : { data: [] }
+  const picked = new Map((profiles ?? []).map((p) => [p.id as string, (p.main_classes ?? []) as MainClass[]]))
+  return drivers.map(({ profile_id, ...d }) => {
+    if (d.academy_class || !profile_id) return d
+    const cls = picked.get(profile_id)?.map((c) => MAIN_CLASS_IN_SIM[sim][c]).find(Boolean)
+    return cls ? { ...d, academy_class: cls } : d
+  })
 }
 
 export async function getSeasons(sim: Sim): Promise<number[]> {

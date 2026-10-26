@@ -6,6 +6,7 @@ import {
   COLORS, botEnabled, clip, createPrivateChannel, discordEnv, makeReadOnlyFor, postToChannel, sendDM, setMemberRole, slugify, timestamp,
   type MessagePayload,
 } from './api'
+import { syncTeamRoles } from './roles'
 import { postDiscordEmbed } from './webhook'
 
 // What the site tells Discord. With a bot token configured these become DMs,
@@ -83,12 +84,6 @@ export const applicationButtons = (inquiryId: string): MessagePayload['component
     ],
   },
 ]
-
-// LMU Academy / ACC Academy roles to match a student's program (none = neither).
-async function setProgramRoles(discordId: string, program: Program | null) {
-  await setMemberRole(discordId, discordEnv.roles.academyLmu, program === 'lmu' || program === 'both')
-  await setMemberRole(discordId, discordEnv.roles.academyAcc, program === 'acc' || program === 'both')
-}
 
 const PROGRAM_ACCESS: Record<Program, string> = {
   lmu: 'the LMU Academy role and access to the team chat',
@@ -206,8 +201,7 @@ export async function onStudentApproved(studentId: string, coachName: string | n
     `You’re in! Welcome to PRISM Academy (${PROGRAM_SHORT[program]})${coachName ? `. Your coach is **${clip(coachName, 100)}**` : ''}. You now have ${PROGRAM_ACCESS[program]}.`
   )
   if (!id) return
-  await setMemberRole(id, discordEnv.roles.academy, true)
-  await setProgramRoles(id, program)
+  await syncTeamRoles([studentId])
   await sendDM(id, {
     embeds: [{
       title: 'Welcome to PRISM Academy',
@@ -218,19 +212,10 @@ export async function onStudentApproved(studentId: string, coachName: string | n
   })
 }
 
-export async function onStudentRemoved(studentId: string) {
-  if (!botEnabled()) return
-  const [id] = await discordIds([studentId])
-  if (!id) return
-  await setMemberRole(id, discordEnv.roles.academy, false)
-  await setProgramRoles(id, null)
-}
-
-// An admin changed which program a student is in.
-export async function onStudentProgramChanged(studentId: string, program: Program | null) {
-  if (!botEnabled()) return
-  const [id] = await discordIds([studentId])
-  if (id) await setProgramRoles(id, program)
+// An admin removed a student, or changed their program or tier (moving up to
+// Driver swaps LMU / ACC Academy for LMU / ACC Driver).
+export async function onStudentChanged(studentId: string) {
+  await syncTeamRoles([studentId])
 }
 
 export async function onCoachAdded(profileId: string) {
