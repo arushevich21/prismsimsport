@@ -135,17 +135,27 @@ export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
     return []
   }
   const drivers = (data ?? []) as (Driver & { profile_id: string | null })[]
-  const unclassed = drivers.filter((d) => !d.academy_class && d.profile_id).map((d) => d.profile_id!)
-  // Profiles aren't public, so this reads only main_classes with the service role.
-  const { data: profiles } = unclassed.length
-    ? await createAdminClient().from('profiles').select('id, main_classes').in('id', unclassed)
-    : { data: [] }
-  const picked = new Map((profiles ?? []).map((p) => [p.id as string, (p.main_classes ?? []) as MainClass[]]))
+  const picked = await mainClassesOf(drivers.filter((d) => !d.academy_class && d.profile_id).map((d) => d.profile_id!))
   return drivers.map(({ profile_id, ...d }) => {
     if (d.academy_class || !profile_id) return d
     const cls = picked.get(profile_id)?.map((c) => MAIN_CLASS_IN_SIM[sim][c]).find(Boolean)
     return cls ? { ...d, academy_class: cls } : d
   })
+}
+
+// Profiles aren't public, so this reads only main_classes with the service
+// role. Optional: without the key (or on any error) drivers just go
+// unclassed, rather than failing the page or the build.
+async function mainClassesOf(profileIds: string[]): Promise<Map<string, MainClass[]>> {
+  if (profileIds.length === 0 || !process.env.SUPABASE_SERVICE_ROLE_KEY) return new Map()
+  try {
+    const { data, error } = await createAdminClient().from('profiles').select('id, main_classes').in('id', profileIds)
+    if (error) console.error('[data] main classes:', error.message)
+    return new Map((data ?? []).map((p) => [p.id as string, (p.main_classes ?? []) as MainClass[]]))
+  } catch (err) {
+    console.error('[data] main classes:', err instanceof Error ? err.message : err)
+    return new Map()
+  }
 }
 
 export async function getSeasons(sim: Sim): Promise<number[]> {
