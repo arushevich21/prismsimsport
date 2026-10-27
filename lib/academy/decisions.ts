@@ -1,4 +1,5 @@
 import 'server-only'
+import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { onApplicationDeclined, onStudentApproved } from '@/lib/discord/notify'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -32,6 +33,7 @@ export async function approveInquiry(inquiryId: string, coachId: string | null, 
       : { data: null }
     await onStudentApproved(inquiry.user_id, coach ? coach.display_name || coach.discord_username : null, program)
   })
+  revalidatePath('/team', 'layout') // new students are listed in the academy section
   return { ok: true }
 }
 

@@ -238,7 +238,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                 Academy driver <span className="text-muted">(ACADEMY instead of GUEST in race lineups)</span>
               </label>
               {d.academy && (
-                <label className={label}>Academy class
+                <label className={label}>Academy class <span className="text-muted">(if they haven’t picked one on their profile)</span>
                   <select className={field} value={d.academy_class ?? ''} onChange={(e) => patch(d.id, { academy_class: e.target.value || null })}>
                     <option value="">Not set</option>
                     {[...new Set(d.sims.flatMap((s) => CLASSES[s]))].map((c) => <option key={c}>{c}</option>)}
