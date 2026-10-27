@@ -157,6 +157,23 @@ export async function setMemberRoles(discordUserId: string, wanted: [roleId: str
   }
 }
 
+// "🥉 Team Captain" → "team captain", for matching roles by name.
+const roleKey = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim()
+
+// Recolors server roles, picked by ID or by name (emoji and case ignored),
+// touching only the ones that differ. The bot needs Manage Roles, and its own
+// role must sit above these in the server's role list.
+export async function setRoleColors(byId: [roleId: string | undefined, color: number][], byName: Record<string, number>) {
+  if (!discordEnv.guildId) return
+  const roles = await discord<{ id: string; name: string; color: number }[]>('GET', `/guilds/${discordEnv.guildId}/roles`)
+  for (const role of roles ?? []) {
+    const color = byId.find(([id]) => id === role.id)?.[1] ?? byName[roleKey(role.name)]
+    if (color !== undefined && role.color !== color) {
+      await discord('PATCH', `/guilds/${discordEnv.guildId}/roles/${role.id}`, { color }, { 'X-Audit-Log-Reason': 'PRISM website colors' })
+    }
+  }
+}
+
 // Their nickname in the PRISM server (null clears it). Discord won't let a bot
 // rename the server owner or anyone whose top role is above the bot's.
 export function setNickname(discordUserId: string, nick: string | null) {
@@ -164,7 +181,7 @@ export function setNickname(discordUserId: string, nick: string | null) {
   return discord('PATCH', `/guilds/${discordEnv.guildId}/members/${discordUserId}`, { nick }, { 'X-Audit-Log-Reason': 'PRISM website profile' })
 }
 
-export type GuildMember = { user?: { id: string; username: string; global_name: string | null }; nick: string | null; roles: string[] }
+export type GuildMember = { user?: { id: string; username: string; global_name: string | null; bot?: boolean }; nick: string | null; roles: string[] }
 
 export function getGuildMember(discordUserId: string) {
   if (!discordEnv.guildId) return Promise.resolve(null)
