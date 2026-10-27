@@ -151,7 +151,10 @@ export function setMemberRole(discordUserId: string, roleId: string | undefined,
 export async function setMemberRoles(discordUserId: string, wanted: [roleId: string | undefined, on: boolean][]) {
   if (!discordEnv.guildId) return
   const member = await discord<{ roles: string[] }>('GET', `/guilds/${discordEnv.guildId}/members/${discordUserId}`)
-  if (!member) return
+  if (!member) {
+    if (lastError?.startsWith('Discord says')) lastError = 'they’re not in the PRISM Discord'
+    return
+  }
   for (const [roleId, on] of wanted) {
     if (roleId && member.roles.includes(roleId) !== on) await setMemberRole(discordUserId, roleId, on)
   }

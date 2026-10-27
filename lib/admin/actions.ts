@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { getViewer } from '@/lib/auth'
-import { botEnabled, discordEnv, listGuildMembers, listTextChannels } from '@/lib/discord/api'
-import { removeDuplicateDriver, setClassRoles, syncClassRoles, syncTeamRoles } from '@/lib/discord/roles'
+import { botEnabled, discordEnv, listGuildMembers, listTextChannels, takeDiscordError } from '@/lib/discord/api'
+import { removeDuplicateDriver, setClassRoles, setLineupRoles, syncClassRoles, syncTeamRoles } from '@/lib/discord/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { announceNewResults, removeRace, syncRace, type RaceSyncReport } from '@/lib/discord/team'
 import { MAIN_CLASSES, MAX_MAIN_CLASSES, isMainClass, type MainClass, type Sim } from '@/lib/types'
@@ -85,9 +85,18 @@ export async function removeAutoAddedDriver(driverId: string) {
   await removeDuplicateDriver(driverId)
 }
 
-// Only the drivers just edited: everyone else's lineup follows their Discord
-// role, which may have changed since the editor loaded.
-export async function syncRoles(profileIds: string[]) {
-  if (!(await isAdmin())) return
-  await syncTeamRoles(profileIds)
+// The LMU / ACC Driver roles of the drivers just edited, matched to their
+// main lineup ticks. Call it before refreshing the team page: the lineups
+// follow those roles, so a tick the role doesn't match yet would be undone.
+// Only these drivers: everyone else's lineup follows their Discord role, which
+// may have changed since the editor loaded. Returns why Discord refused, if it did.
+export async function syncRoles(driverIds: string[]): Promise<string | null> {
+  if (!(await isAdmin()) || !botEnabled() || driverIds.length === 0) return null
+  const { data } = await createAdminClient().from('drivers').select('profile_id, discord_id, main_lineup, archived').in('id', driverIds)
+  takeDiscordError()
+  await syncTeamRoles((data ?? []).flatMap((d) => (d.profile_id as string | null) ?? []))
+  for (const d of data ?? []) {
+    if (!d.profile_id && d.discord_id) await setLineupRoles(d.discord_id as string, d.archived ? [] : (d.main_lineup as Sim[]))
+  }
+  return takeDiscordError()
 }

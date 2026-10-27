@@ -125,21 +125,30 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
     setStatus(null)
     try {
       for (const x of duplicates) await removeAutoAddedDriver(x.id)
+      const savedIds: string[] = []
       for (const d of changed) {
         const values = { ...editable(d), name: d.name.trim() }
         const { data: saved, error } = d.id.startsWith('new-')
           ? await supabase.from('drivers').insert(values).select('id').single()
           : await supabase.from('drivers').update(values).eq('id', d.id).select('id').single()
         if (error) throw error
+        savedIds.push(saved.id as string)
         const classes = classEdits.get(d.id)
         if (classes) await setDriverClasses(saved.id as string, classes)
       }
       setDirty(new Set())
       setClassEdits(new Map())
       await reload()
-      await Promise.all([refreshPublicPages(), syncRoles(changed.flatMap((d) => d.profile_id ?? []))])
+      // Roles first: the main lineups follow them when the page rebuilds.
+      const refused = await syncRoles(savedIds)
+      await refreshPublicPages()
       router.refresh()
-      setStatus({ kind: 'ok', text: `Saved ${changed.length} driver${changed.length === 1 ? '' : 's'}.${duplicates.length ? ` Removed the duplicate entr${duplicates.length === 1 ? 'y' : 'ies'} the site had added: ${duplicates.map((x) => x.name).join(', ')}.` : ''}` })
+      const saved = `Saved ${changed.length} driver${changed.length === 1 ? '' : 's'}.${duplicates.length ? ` Removed the duplicate entr${duplicates.length === 1 ? 'y' : 'ies'} the site had added: ${duplicates.map((x) => x.name).join(', ')}.` : ''}`
+      setStatus(
+        refused
+          ? { kind: 'error', text: `${saved} But Discord wouldn’t change their Driver role (${refused}), and the LMU lineup follows that role, so the change may be undone.${refused.includes('not in the PRISM Discord') ? ' They need to join the server first.' : ' Move the PRISM bot role above LMU Driver in the server’s role list.'}` }
+          : { kind: 'ok', text: saved }
+      )
     } catch (e) {
       setStatus({ kind: 'error', text: errorText(e) })
     } finally {

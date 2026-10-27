@@ -283,6 +283,16 @@ export async function syncClassRoles(profileId: string) {
   if (data?.discord_id) await setClassRoles(data.discord_id as string, (data.main_classes ?? []) as MainClass[])
 }
 
+// LMU / ACC Driver for someone linked to the roster only by Discord ID (no
+// site account, so no student record to weigh), from their main lineups.
+export async function setLineupRoles(discordId: string, lineup: Sim[]) {
+  if (!botEnabled()) return
+  await setMemberRoles(discordId, [
+    [discordEnv.roles.lmu, lineup.includes('lmu')],
+    [discordEnv.roles.acc, lineup.includes('acc')],
+  ])
+}
+
 export async function setClassRoles(discordId: string, classes: MainClass[]) {
   if (!botEnabled()) return
   await setMemberRoles(discordId, MAIN_CLASSES.map((c) => [discordEnv.roles.classes[c], classes.includes(c)]))
