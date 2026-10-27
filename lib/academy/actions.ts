@@ -119,6 +119,7 @@ export async function updateStudent(fd: FormData): Promise<void> {
   // A new program or tier means different Discord roles (LMU Academy → LMU Driver…).
   if (before && (before.program !== program || before.tier !== tier)) after(() => onStudentChanged(profileId))
   revalidatePath('/coach', 'layout')
+  revalidatePath('/team', 'layout') // the program decides which team page lists them
 }
 
 export async function setTeamReady(studentId: string, ready: boolean): Promise<Result> {
@@ -145,8 +146,11 @@ export async function removeStudent(fd: FormData): Promise<void> {
   await admin.from('students').delete().eq('profile_id', id)
   await admin.from('profiles').update({ role: 'member' }).eq('id', id).eq('role', 'student')
   await admin.from('members').update({ active: false }).eq('user_id', id)
+  // Off the team page's academy section too, unless they're on a main lineup.
+  await admin.from('drivers').update({ academy: false }).eq('profile_id', id)
   after(() => onStudentChanged(id))
   revalidatePath('/coach', 'layout')
+  revalidatePath('/team', 'layout')
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────

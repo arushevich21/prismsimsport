@@ -116,45 +116,81 @@ export async function getMainLineup(sim: Sim): Promise<Driver[]> {
   return (data ?? []) as Driver[]
 }
 
-// Academy drivers who race in this sim, whether or not they've been in a lineup yet.
-// Academy drivers with no class set in the roster go under the first class
-// they picked on their profile, if it's one this sim races.
+type RosterDriver = Driver & { profile_id: string | null }
+const withoutProfile = ({ profile_id: _, ...d }: RosterDriver): Driver => d
+
+// The academy section of the team page: everyone approved into the academy
+// for this sim (LMU, ACC or both), plus roster drivers ticked Academy. A
+// linked roster entry supplies their flag, nickname and photo, and they drop
+// off once they're on this sim's main lineup. Each goes under the first class
+// they picked on their profile, else the roster's academy class.
 export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
-  const supabase = createPublicClient()
-  const { data, error } = await supabase
+  const { data, error } = await createPublicClient()
     .from('drivers')
     .select(`${DRIVER_COLUMNS}, profile_id`)
     .eq('academy', true)
     .contains('sims', [sim])
     .not('main_lineup', 'cs', `{${sim}}`)
     .eq('archived', false)
-    .order('sort_order')
-    .order('name')
   if (error) {
     console.error('[data] academy drivers:', error.message)
     return []
   }
-  const drivers = (data ?? []) as (Driver & { profile_id: string | null })[]
-  const picked = await mainClassesOf(drivers.filter((d) => !d.academy_class && d.profile_id).map((d) => d.profile_id!))
-  return drivers.map(({ profile_id, ...d }) => {
-    if (d.academy_class || !profile_id) return d
-    const cls = picked.get(profile_id)?.map((c) => MAIN_CLASS_IN_SIM[sim][c]).find(Boolean)
-    return cls ? { ...d, academy_class: cls } : d
-  })
+  const roster = (data ?? []) as RosterDriver[]
+  const accounts = await academyAccounts(sim, roster.flatMap((d) => (d.profile_id ? [d.profile_id] : [])))
+  const classIn = (profileId: string | null) =>
+    (profileId && accounts?.classes.get(profileId)?.map((c) => MAIN_CLASS_IN_SIM[sim][c]).find(Boolean)) || null
+
+  const list = roster.map((d) => ({ ...withoutProfile(d), academy_class: classIn(d.profile_id) ?? d.academy_class }))
+  const listed = new Set(roster.map((d) => d.profile_id))
+  for (const s of accounts?.students ?? []) {
+    if (listed.has(s.id)) continue
+    const d = accounts!.linked.get(s.id)
+    if (d?.main_lineup.includes(sim)) continue
+    list.push(
+      d
+        ? { ...withoutProfile(d), academy: true, academy_class: classIn(s.id) ?? d.academy_class }
+        : {
+            id: `student-${s.id}`, name: s.name, nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [],
+            photo_path: null, academy: true, academy_class: classIn(s.id), lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null,
+          }
+    )
+  }
+  return list.sort((a, b) => a.name.localeCompare(b.name))
 }
 
-// Profiles aren't public, so this reads only main_classes with the service
-// role. Optional: without the key (or on any error) drivers just go
-// unclassed, rather than failing the page or the build.
-async function mainClassesOf(profileIds: string[]): Promise<Map<string, MainClass[]>> {
-  if (profileIds.length === 0 || !process.env.SUPABASE_SERVICE_ROLE_KEY) return new Map()
+// Academy students in this sim's program, their roster entries and everyone's
+// picked classes. Profiles and students aren't public, so this uses the
+// service role. Null without the key or on any error: the team page then
+// shows the roster's academy drivers alone instead of failing the build.
+async function academyAccounts(sim: Sim, rosterProfileIds: string[]) {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null
   try {
-    const { data, error } = await createAdminClient().from('profiles').select('id, main_classes').in('id', profileIds)
-    if (error) console.error('[data] main classes:', error.message)
-    return new Map((data ?? []).map((p) => [p.id as string, (p.main_classes ?? []) as MainClass[]]))
+    const admin = createAdminClient()
+    const { data: students, error } = await admin
+      .from('students')
+      .select('profile_id, profile:profiles!students_profile_id_fkey ( display_name, discord_username )')
+      .in('program', [sim, 'both'])
+    if (error) throw new Error(error.message)
+    const studentIds = (students ?? []).map((s) => s.profile_id as string)
+    const ids = [...new Set([...studentIds, ...rosterProfileIds])]
+    const [{ data: profiles }, { data: linked }] = await Promise.all([
+      ids.length ? admin.from('profiles').select('id, main_classes').in('id', ids) : { data: [] },
+      studentIds.length
+        ? admin.from('drivers').select(`${DRIVER_COLUMNS}, profile_id`).in('profile_id', studentIds).eq('archived', false)
+        : { data: [] },
+    ])
+    return {
+      students: (students ?? []).map((s) => {
+        const p = s.profile as unknown as { display_name: string | null; discord_username: string | null } | null
+        return { id: s.profile_id as string, name: p?.display_name || p?.discord_username || 'Academy driver' }
+      }),
+      classes: new Map((profiles ?? []).map((p) => [p.id as string, (p.main_classes ?? []) as MainClass[]])),
+      linked: new Map(((linked ?? []) as RosterDriver[]).map((d) => [d.profile_id!, d])),
+    }
   } catch (err) {
-    console.error('[data] main classes:', err instanceof Error ? err.message : err)
-    return new Map()
+    console.error('[data] academy accounts:', err instanceof Error ? err.message : err)
+    return null
   }
 }
 
