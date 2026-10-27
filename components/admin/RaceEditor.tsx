@@ -387,7 +387,7 @@ function NewDriverForm({ sim, onCreated, onCancel }: { sim: Sim; onCreated: (d: 
     const { data, error } = await createClient()
       .from('drivers')
       .insert({ name: name.trim(), nickname: nickname.trim() || null, country_code: country || null, sims: [sim], main_lineup: main ? [sim] : [], academy })
-      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on, archived, sort_order, profile_id')
+      .select('id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on, archived, sort_order, profile_id, discord_id, auto_added')
       .single()
     setBusy(false)
     if (error) return setError(errorText(error))

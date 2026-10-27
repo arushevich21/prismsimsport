@@ -2,7 +2,8 @@ import 'server-only'
 import type { Program, Tier } from '@/lib/academy/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MAIN_CLASSES, MAX_MAIN_CLASSES, type MainClass, type Sim } from '@/lib/types'
-import { botEnabled, discordEnv, getGuildMember, setMemberRoles, type GuildMember } from './api'
+import { CLASS_HEX } from '@/lib/site'
+import { COLORS, botEnabled, discordEnv, getGuildMember, setMemberRoles, setRoleColors, type GuildMember } from './api'
 
 // The Discord roles the site manages, worked out from the site's data in one
 // place so the academy, the roster and profiles can't undo each other's roles.
@@ -135,9 +136,65 @@ async function syncLineupsFromRoles(members: GuildMember[], partial: boolean) {
     const p = profileOf.get(discordId)
     // Upsert: the LMU and ACC team pages can add the same person at once.
     await admin.from('drivers').upsert(
-      { name: (p?.display_name as string) || (p?.discord_username as string) || discordName(m), sims: on, main_lineup: on, profile_id: p?.id ?? null, discord_id: discordId, sort_order: 99 },
+      { name: (p?.display_name as string) || (p?.discord_username as string) || discordName(m), sims: on, main_lineup: on, profile_id: p?.id ?? null, discord_id: discordId, sort_order: 99, auto_added: true },
       { onConflict: 'discord_id', ignoreDuplicates: true }
     )
+    changed = true
+  }
+  return changed
+}
+
+// "Diego Paul Fimbres Casas!" → "diegopaulfimbrescasas", for matching names.
+const nameKey = (name: string | null | undefined) => (name ?? '').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '')
+
+// A roster entry the site added for someone, once a hand-made entry is linked
+// to the same person: deleted, or archived and unlinked if it's been in a race.
+export async function removeDuplicateDriver(driverId: string) {
+  const admin = createAdminClient()
+  const { count } = await admin.from('race_car_drivers').select('driver_id', { count: 'exact', head: true }).eq('driver_id', driverId)
+  if (count) await admin.from('drivers').update({ archived: true, discord_id: null, profile_id: null, main_lineup: [] }).eq('id', driverId)
+  else await admin.from('drivers').delete().eq('id', driverId)
+}
+
+// Roster entries added by hand aren't tied to anyone, so the syncs can't tell
+// they're the same person as a Discord member. Link each one whose name is
+// exactly someone's site name, Discord nickname, display name or username, as
+// long as only one person has that name, replacing any entry the site added
+// for them. Others are linked in the roster editor.
+async function linkRosterByName(members: GuildMember[]) {
+  const admin = createAdminClient()
+  const [{ data: rows }, { data: profiles }] = await Promise.all([
+    admin.from('drivers').select('id, name, profile_id, discord_id, auto_added'),
+    admin.from('profiles').select('id, discord_id, display_name, discord_username').not('discord_id', 'is', null),
+  ])
+  const drivers = (rows ?? []) as { id: string; name: string; profile_id: string | null; discord_id: string | null; auto_added: boolean }[]
+  const accountOf = new Map((profiles ?? []).map((p) => [p.discord_id as string, p.id as string]))
+  const discordOf = new Map((profiles ?? []).map((p) => [p.id as string, p.discord_id as string]))
+  // Discord ID → the entry already linked to them.
+  const taken = new Map(drivers.flatMap((d) => {
+    const id = d.discord_id ?? (d.profile_id ? discordOf.get(d.profile_id) : undefined)
+    return id ? [[id, d] as const] : []
+  }))
+
+  // Name → the Discord IDs of everyone going by it.
+  const byName = new Map<string, Set<string>>()
+  const add = (name: string | null | undefined, discordId: string) => {
+    const key = nameKey(name)
+    if (key) byName.set(key, (byName.get(key) ?? new Set()).add(discordId))
+  }
+  for (const p of profiles ?? []) [p.display_name, p.discord_username].forEach((n) => add(n as string | null, p.discord_id as string))
+  for (const m of members) if (m.user && !m.user.bot) [m.nick, m.user.global_name, m.user.username].forEach((n) => add(n, m.user!.id))
+
+  let changed = false
+  for (const d of drivers) {
+    if (d.profile_id || d.discord_id) continue
+    const ids = byName.get(nameKey(d.name))
+    const discordId = ids?.size === 1 ? [...ids][0]! : null
+    const existing = discordId ? taken.get(discordId) : undefined
+    if (!discordId || (existing && !existing.auto_added)) continue
+    if (existing) await removeDuplicateDriver(existing.id)
+    taken.set(discordId, d)
+    await admin.from('drivers').update({ discord_id: discordId, profile_id: accountOf.get(discordId) ?? null }).eq('id', d.id)
     changed = true
   }
   return changed
@@ -163,9 +220,10 @@ async function adoptClassRoles(members: GuildMember[]) {
 // sign-in for that one person (`partial`). True if anything changed.
 export async function syncFromDiscord(members: GuildMember[], partial = false) {
   const adopted = (await adoptAcademyMembers(members)).adopted > 0
+  const named = await linkRosterByName(members)
   const lineups = await syncLineupsFromRoles(members, partial)
   const classes = await adoptClassRoles(members)
-  return adopted || lineups || classes
+  return adopted || named || lineups || classes
 }
 
 // syncFromDiscord for one person, on sign-in.
@@ -174,6 +232,48 @@ export async function syncMemberFromDiscord(profileId: string) {
   const { data } = await createAdminClient().from('profiles').select('discord_id').eq('id', profileId).maybeSingle()
   const member = data?.discord_id ? await getGuildMember(data.discord_id as string) : null
   return !!member && (await syncFromDiscord([member], true))
+}
+
+// Server role colors. Only roles that say who someone is on the team get one:
+// drivers are ice and the academy iris, each led by a brighter shade (Team
+// Captain, Coach), and class roles match the class chips on the team page.
+// Pings, sims, skills and bot roles stay uncolored. Changing one of these in
+// Discord is undone on the next team page rebuild; change it here instead.
+// Owner, Administrator and Moderator sit above the bot, so they're set by
+// hand (gold #f0cd6b, emerald #3ecf8e, orange #ff8a4c), and personal roles
+// like Iris are left alone.
+const hex = (h: string) => parseInt(h.slice(1), 16)
+const NO_COLOR = 0
+// Roles the site doesn't otherwise know, by name (emoji and case ignored).
+const COLORS_BY_NAME: Record<string, number> = {
+  'team captain': 0x5fa0f0,
+  partner: 0xff7eb6,
+  'streaming now': 0xe8434f,
+  'server booster': 0xf47fff,
+  bots: 0x99aab5,
+  ...Object.fromEntries([
+    'assetto corsa evo', 'iracing', 'le mans ultimate', 'assetto corsa competizione',
+    'league events', 'coaching updates', 'stream notifications', 'team news',
+    'livery designer', 'streamer', 'photographer', 'setup engineer',
+    'prism simsport', 'falcon motorsport',
+    'prism', 'lmu bop tourist', 'ticket tool', 'carlbot', 'streamcord',
+  ].map((name) => [name, NO_COLOR])),
+}
+
+export async function syncRoleColors() {
+  if (!botEnabled()) return
+  const { roles } = discordEnv
+  await setRoleColors([
+    [roles.lmu, COLORS.ice],
+    [roles.acc, COLORS.ice],
+    [roles.academyLmu, COLORS.iris],
+    [roles.academyAcc, COLORS.iris],
+    [roles.coach, 0x7f83f2],
+    [roles.classes.hy, hex(CLASS_HEX.hypercar)],
+    [roles.classes.lmp2, hex(CLASS_HEX.lmp2)],
+    [roles.classes.lmp3, hex(CLASS_HEX.lmp3)],
+    [roles.classes.gt3, hex(CLASS_HEX.gt3)],
+  ], COLORS_BY_NAME)
 }
 
 // One role per class the person mainly drives (HY, GT3…).

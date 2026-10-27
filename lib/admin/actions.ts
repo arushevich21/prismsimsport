@@ -2,8 +2,8 @@
 
 import { revalidatePath } from 'next/cache'
 import { getViewer } from '@/lib/auth'
-import { botEnabled, listTextChannels } from '@/lib/discord/api'
-import { syncTeamRoles } from '@/lib/discord/roles'
+import { botEnabled, listGuildMembers, listTextChannels } from '@/lib/discord/api'
+import { removeDuplicateDriver, syncTeamRoles } from '@/lib/discord/roles'
 import { announceNewResults, removeRace, syncRace, type RaceSyncReport } from '@/lib/discord/team'
 import type { Sim } from '@/lib/types'
 
@@ -42,6 +42,22 @@ export async function removeRaceFromDiscord(raceId: string) {
 export async function announceResults(sim: Sim, season: number) {
   if (!(await isAdmin())) return 0
   return announceNewResults(sim, season)
+}
+
+// Server members, for linking a roster entry to someone who hasn't signed in
+// to the site. Empty without the bot or the Server Members intent.
+export async function listDiscordMembers(): Promise<{ id: string; label: string }[]> {
+  if (!(await isAdmin()) || !botEnabled()) return []
+  return ((await listGuildMembers()) ?? [])
+    .filter((m) => m.user && !m.user.bot)
+    .map((m) => ({ id: m.user!.id, label: [m.nick || m.user!.global_name, `@${m.user!.username}`].filter(Boolean).join(' · ') }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
+// The entry the site added for someone, now that a hand-made one is linked to them.
+export async function removeAutoAddedDriver(driverId: string) {
+  if (!(await isAdmin())) return
+  await removeDuplicateDriver(driverId)
 }
 
 // Only the drivers just edited: everyone else's lineup follows their Discord
