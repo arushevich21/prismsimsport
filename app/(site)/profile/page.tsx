@@ -3,9 +3,10 @@ import { requireSignedIn } from '@/lib/auth'
 import { driverPhotoUrl } from '@/lib/photos'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { isMainClass } from '@/lib/types'
+import { isMainClass, type DriverRankTier, type Sim } from '@/lib/types'
 import { eyebrow } from '@/lib/ui'
 import { ClassPicker } from './ClassPicker'
+import { DriverDetailsForm } from './DriverDetailsForm'
 import { NameForm } from './NameForm'
 import { PhotoForm } from './PhotoForm'
 
@@ -16,8 +17,12 @@ export default async function ProfilePage() {
   const supabase = await createClient()
   const { data } = await supabase.from('profiles').select('first_name, last_name, main_classes').eq('id', viewer.user.id).maybeSingle()
   const classes = ((data?.main_classes ?? []) as string[]).filter(isMainClass)
-  // Their roster entry, if any: it holds the photo on their driver card.
-  const { data: driver } = await createAdminClient().from('drivers').select('photo_path').eq('profile_id', viewer.user.id).maybeSingle()
+  // Their roster entry, if any: it holds what's on their driver card.
+  const { data: driver } = await createAdminClient()
+    .from('drivers')
+    .select('photo_path, country_code, sims, lmu_dr_tier, lmu_dr_level')
+    .eq('profile_id', viewer.user.id)
+    .maybeSingle()
 
   return (
     <section className="page-x flex justify-center py-16 sm:py-24">
@@ -38,15 +43,19 @@ export default async function ProfilePage() {
           <ClassPicker initial={classes} />
         </div>
         <div className="flex flex-col gap-5 border-t border-line pt-8">
-          <h2 className="font-heading text-2xl leading-tight font-bold">Driver photo</h2>
+          <h2 className="font-heading text-2xl leading-tight font-bold">Your driver card</h2>
           {driver ? (
             <>
-              <p className="text-[17px] leading-relaxed text-[#4a4f57]">The photo on your driver card on the team page.</p>
+              <p className="text-[17px] leading-relaxed text-[#4a4f57]">Your photo, flag and rank on the team page.</p>
               <PhotoForm photoUrl={driverPhotoUrl(driver.photo_path as string | null)} />
+              <DriverDetailsForm
+                country={driver.country_code as string | null}
+                rank={(driver.sims as Sim[]).includes('lmu') ? { tier: driver.lmu_dr_tier as DriverRankTier | null, level: driver.lmu_dr_level as number | null } : undefined}
+              />
             </>
           ) : (
             <p className="text-[17px] leading-relaxed text-[#4a4f57]">
-              Once you’re on the team roster, you can add the photo for your driver card here.
+              Once you’re on the team roster, you can set your photo, country and rank for your driver card here.
             </p>
           )}
         </div>
