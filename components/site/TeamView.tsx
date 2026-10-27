@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { getAcademyDrivers, getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
 import { Editable } from '@/components/admin/Editable'
 import { classChip } from '@/lib/site'
-import { SIM_SHORT, carStart, lineupBadge, raceSlots, type Sim } from '@/lib/types'
+import { CLASSES, SIM_SHORT, carStart, lineupBadge, raceSlots, type Sim } from '@/lib/types'
 import { btn, eyebrow, h2 } from '@/lib/ui'
 import { Countdown, LocalTime } from './Countdown'
 import { AcademyDrivers } from './AcademyDrivers'
@@ -16,6 +16,17 @@ const TABS: { sim: Sim; label: string }[] = [
   { sim: 'lmu', label: 'Le Mans Ultimate' },
   { sim: 'acc', label: 'ACC · Falcon Motorsport' },
 ]
+
+// The main lineup grouped by class, in the sim's class order. Drivers with no
+// class go under "Other", or ungrouped when nobody has one.
+function byClass<D extends { lineup_class: string | null }>(sim: Sim, drivers: D[]) {
+  const groups = CLASSES[sim]
+    .map((cls) => ({ cls, drivers: drivers.filter((d) => d.lineup_class === cls) }))
+    .filter((g) => g.drivers.length > 0)
+  const rest = drivers.filter((d) => !d.lineup_class || !CLASSES[sim].includes(d.lineup_class))
+  if (rest.length > 0) groups.push({ cls: groups.length > 0 ? 'Other' : '', drivers: rest })
+  return groups
+}
 
 export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; season?: number }) {
   const [race, lineup, academy, seasons] = await Promise.all([getNextRace(sim), getMainLineup(sim), getAcademyDrivers(sim), getSeasons(sim)])
@@ -134,8 +145,17 @@ export async function TeamView({ sim, season: requestedSeason }: { sim: Sim; sea
           </div>
           <Editable editor="roster" sim={sim}>
           {lineup.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
-              {lineup.map((d) => <DriverCard key={d.id} driver={d} showRank={sim === 'lmu'} />)}
+            <div className="flex flex-col gap-8">
+              {byClass(sim, lineup).map((g) => (
+                <div key={g.cls || 'all'} className="flex flex-col gap-4">
+                  {g.cls && (
+                    <span className={`self-start rounded px-2 py-1 text-[11px] font-semibold tracking-wider text-ink uppercase ${g.cls === 'Other' ? 'bg-line' : classChip(g.cls)}`}>{g.cls}</span>
+                  )}
+                  <div className="grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-3 lg:grid-cols-5">
+                    {g.drivers.map((d) => <DriverCard key={d.id} driver={d} showRank={sim === 'lmu'} />)}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <p className="text-muted">The lineup is being finalised.</p>

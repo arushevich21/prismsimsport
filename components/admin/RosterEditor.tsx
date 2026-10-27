@@ -96,7 +96,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
       }
       setDirty(new Set())
       await reload()
-      await Promise.all([refreshPublicPages(), syncRoles()])
+      await Promise.all([refreshPublicPages(), syncRoles(changed.flatMap((d) => d.profile_id ?? []))])
       router.refresh()
       setStatus({ kind: 'ok', text: `Saved ${changed.length} driver${changed.length === 1 ? '' : 's'}.` })
     } catch (e) {

@@ -164,6 +164,27 @@ export function setNickname(discordUserId: string, nick: string | null) {
   return discord('PATCH', `/guilds/${discordEnv.guildId}/members/${discordUserId}`, { nick }, { 'X-Audit-Log-Reason': 'PRISM website profile' })
 }
 
+export type GuildMember = { user?: { id: string; username: string; global_name: string | null }; nick: string | null; roles: string[] }
+
+export function getGuildMember(discordUserId: string) {
+  if (!discordEnv.guildId) return Promise.resolve(null)
+  return discord<GuildMember>('GET', `/guilds/${discordEnv.guildId}/members/${discordUserId}`)
+}
+
+// Everyone in the server, 1000 at a time. Needs the Server Members intent
+// turned on for the bot in the Discord developer portal; null without it.
+export async function listGuildMembers(): Promise<GuildMember[] | null> {
+  if (!discordEnv.guildId) return null
+  const all: GuildMember[] = []
+  for (let after = '0'; ; ) {
+    const page = await discord<GuildMember[]>('GET', `/guilds/${discordEnv.guildId}/members?limit=1000&after=${after}`)
+    if (!page) return null
+    all.push(...page)
+    if (page.length < 1000) return all
+    after = page[page.length - 1].user!.id
+  }
+}
+
 export async function isGuildMember(discordUserId: string) {
   if (!discordEnv.guildId) return false
   return !!(await discord('GET', `/guilds/${discordEnv.guildId}/members/${discordUserId}`))

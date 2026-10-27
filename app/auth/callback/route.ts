@@ -1,7 +1,8 @@
+import { revalidatePath } from 'next/cache'
 import { after, NextResponse } from 'next/server'
 import { homeFor, type Role } from '@/lib/auth'
 import { addGuildMember } from '@/lib/discord/api'
-import { syncClassRoles, syncTeamRoles } from '@/lib/discord/roles'
+import { syncMemberFromDiscord, syncClassRoles, syncTeamRoles } from '@/lib/discord/roles'
 import { createClient } from '@/lib/supabase/server'
 
 // Discord sends the user back here with a one-time code. Exchanging it on the
@@ -22,8 +23,12 @@ export async function GET(request: Request) {
       const userId = data.user?.id
       after(async () => {
         if (autoJoin) await addGuildMember(discordId, token)
+        if (!userId) return
+        // Roles given by hand in Discord (Academy, LMU Driver, classes) first
+        // become site data, so the sync below keeps them.
+        if (await syncMemberFromDiscord(userId)) revalidatePath('/team', 'layout')
         // Catch up on roles they couldn't get while they weren't in the server.
-        if (userId) await Promise.all([syncTeamRoles([userId]), syncClassRoles(userId)])
+        await Promise.all([syncTeamRoles([userId]), syncClassRoles(userId)])
       })
       if (next) return NextResponse.redirect(`${origin}${next}`)
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user?.id ?? '').maybeSingle()
