@@ -280,7 +280,10 @@ export async function syncRoleColors() {
 export async function syncClassRoles(profileId: string) {
   if (!botEnabled()) return
   const { data } = await createAdminClient().from('profiles').select('discord_id, main_classes').eq('id', profileId).maybeSingle()
-  if (!data?.discord_id) return
-  const classes = (data.main_classes ?? []) as MainClass[]
-  await setMemberRoles(data.discord_id as string, MAIN_CLASSES.map((c) => [discordEnv.roles.classes[c], classes.includes(c)]))
+  if (data?.discord_id) await setClassRoles(data.discord_id as string, (data.main_classes ?? []) as MainClass[])
+}
+
+export async function setClassRoles(discordId: string, classes: MainClass[]) {
+  if (!botEnabled()) return
+  await setMemberRoles(discordId, MAIN_CLASSES.map((c) => [discordEnv.roles.classes[c], classes.includes(c)]))
 }

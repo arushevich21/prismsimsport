@@ -15,7 +15,7 @@ export default async function CoachLayout({ children }: { children: React.ReactN
     { href: '/coach', label: 'Queue', badge: q.applications.length + q.telemetry.length + q.threads.length + q.needsAction.length },
     { href: '/coach/messages', label: 'Messages', badge: q.threads.length },
     { href: '/coach/students', label: admin ? 'All students' : 'My students' },
-    ...(admin ? [{ href: '/coach/library', label: 'Library & setups' }] : []),
+    ...(admin ? [{ href: '/coach/roster', label: 'Driver roster' }, { href: '/coach/library', label: 'Library & setups' }] : []),
     { href: '/coach/settings', label: 'Settings' },
     { href: '/profile', label: 'My profile' },
   ]
