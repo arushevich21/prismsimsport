@@ -65,3 +65,43 @@ export async function setMainClasses(classes: string[]): Promise<Result> {
   revalidatePath('/team', 'layout') // academy drivers are grouped by class there
   return { ok: true }
 }
+
+// ── Driver photo ────────────────────────────────────────────────────────────
+
+const PHOTO_TYPES = ['image/webp', 'image/jpeg', 'image/png']
+const PHOTO_MAX_BYTES = 5 * 1024 * 1024 // the driver-photos bucket's limit
+
+// The photo on their driver card on the team page. Only for people with a
+// roster entry linked to their account; the browser resizes it first.
+export async function setDriverPhoto(fd: FormData): Promise<Result> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: 'Please sign in again.' }
+  const file = fd.get('photo')
+  if (!(file instanceof Blob) || !PHOTO_TYPES.includes(file.type)) return { ok: false, error: 'Please choose a JPEG, PNG or WebP image.' }
+  if (file.size > PHOTO_MAX_BYTES) return { ok: false, error: 'That image is too large. Try one under 5 MB.' }
+
+  const admin = createAdminClient()
+  const { data: driver } = await admin.from('drivers').select('id, photo_path').eq('profile_id', viewer.user.id).maybeSingle()
+  if (!driver) return { ok: false, error: 'You’re not on the team roster yet, so there’s no driver card to add a photo to.' }
+  const path = `${driver.id}/${crypto.randomUUID()}.webp`
+  const { error: upErr } = await admin.storage.from('driver-photos').upload(path, file, { contentType: file.type })
+  if (upErr) return { ok: false, error: upErr.message }
+  const { error } = await admin.from('drivers').update({ photo_path: path }).eq('id', driver.id)
+  if (error) return { ok: false, error: error.message }
+  if (driver.photo_path) await admin.storage.from('driver-photos').remove([driver.photo_path as string])
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}
+
+export async function removeDriverPhoto(): Promise<Result> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: 'Please sign in again.' }
+  const admin = createAdminClient()
+  const { data: driver } = await admin.from('drivers').select('id, photo_path').eq('profile_id', viewer.user.id).maybeSingle()
+  if (!driver?.photo_path) return { ok: true }
+  const { error } = await admin.from('drivers').update({ photo_path: null }).eq('id', driver.id)
+  if (error) return { ok: false, error: error.message }
+  await admin.storage.from('driver-photos').remove([driver.photo_path as string])
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}

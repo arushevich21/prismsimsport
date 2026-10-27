@@ -2,14 +2,14 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { listDiscordMembers, refreshPublicPages, removeAutoAddedDriver, syncRoles } from '@/lib/admin/actions'
+import { listDiscordMembers, refreshPublicPages, removeAutoAddedDriver, setDriverClasses, syncRoles } from '@/lib/admin/actions'
 import { dangerBtn, errorText, field, getCountryOptions, label, primaryBtn, resizeImage, smallBtn, uid } from '@/lib/admin/shared'
 import { driverPhotoUrl } from '@/lib/photos'
 import { createClient } from '@/lib/supabase/client'
-import { CLASSES, DR_TIERS, SIMS, SIM_SHORT, type DriverRankTier, type Sim } from '@/lib/types'
+import { DR_TIERS, MAIN_CLASSES, MAIN_CLASS_LABEL, MAX_MAIN_CLASSES, SIMS, SIM_SHORT, type DriverRankTier, type MainClass, type Sim } from '@/lib/types'
 import { useRoster, type AdminDriver } from './useRoster'
 
-type Filter = Sim | 'all' | 'archived'
+type Filter = Sim | 'all' | 'archived' | 'discord'
 
 const editable = (d: AdminDriver) => ({
   name: d.name,
@@ -19,7 +19,6 @@ const editable = (d: AdminDriver) => ({
   sims: d.sims,
   main_lineup: d.main_lineup.filter((s) => d.sims.includes(s)),
   academy: d.academy,
-  academy_class: d.academy ? d.academy_class : null,
   lmu_dr_tier: d.lmu_dr_tier,
   lmu_dr_level: d.lmu_dr_tier ? d.lmu_dr_level : null,
   lmu_dr_updated_on: d.lmu_dr_updated_on,
@@ -36,8 +35,10 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   const [filter, setFilter] = useState<Filter>(sim)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
-  const [accounts, setAccounts] = useState<{ id: string; label: string; discordId: string | null }[]>([])
-  const [members, setMembers] = useState<{ id: string; label: string }[]>([])
+  const [accounts, setAccounts] = useState<{ id: string; label: string; discordId: string | null; classes: MainClass[] }[]>([])
+  const [members, setMembers] = useState<{ id: string; label: string; classes: MainClass[] }[]>([])
+  // Classes changed in the editor, saved with setDriverClasses.
+  const [classEdits, setClassEdits] = useState<Map<string, MainClass[]>>(new Map())
 
   // Who a driver can be linked to: site accounts, and server members who haven't
   // signed in yet (linked by Discord ID). Linking is how the Discord syncs know
@@ -46,13 +47,14 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
     let cancelled = false
     createClient()
       .from('profiles')
-      .select('id, display_name, discord_username, discord_id')
+      .select('id, display_name, discord_username, discord_id, main_classes')
       .order('display_name')
       .then(({ data }) => {
         if (cancelled) return
         setAccounts((data ?? []).map((p) => ({
           id: p.id as string,
           discordId: p.discord_id as string | null,
+          classes: (p.main_classes ?? []) as MainClass[],
           label: [p.display_name, p.discord_username && `@${String(p.discord_username).replace(/#0$/, '')}`].filter(Boolean).join(' · ') || 'Unnamed account',
         })))
       })
@@ -64,6 +66,17 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   const withAccount = new Set(accounts.map((a) => a.discordId))
   // The Discord account an entry stands for, however it's linked.
   const discordOf = (d: AdminDriver) => d.discord_id ?? accounts.find((a) => a.id === d.profile_id)?.discordId ?? null
+  // A driver's classes as the team page sees them: their account's, else their
+  // Discord member's, else the roster entry's own (see setDriverClasses).
+  const classesOf = (d: AdminDriver) =>
+    classEdits.get(d.id) ??
+    (d.profile_id ? accounts.find((a) => a.id === d.profile_id)?.classes : d.discord_id ? members.find((m) => m.id === d.discord_id)?.classes : undefined) ??
+    d.main_classes
+  const toggleClass = (d: AdminDriver, c: MainClass, on: boolean) => {
+    const next = on ? [...classesOf(d), c] : classesOf(d).filter((x) => x !== c)
+    setClassEdits((m) => new Map(m).set(d.id, next))
+    setDirty((s) => new Set(s).add(d.id))
+  }
   const linkValue = (d: AdminDriver) => (d.profile_id ? `p:${d.profile_id}` : d.discord_id ? `d:${d.discord_id}` : '')
   const link = (id: string, value: string) =>
     patch(id, value.startsWith('p:') ? { profile_id: value.slice(2), discord_id: null } : value.startsWith('d:') ? { profile_id: null, discord_id: value.slice(2) } : { profile_id: null, discord_id: null })
@@ -79,17 +92,19 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   const toggle = (list: Sim[], s: Sim, on: boolean) => (on ? [...new Set([...list, s])] : list.filter((x) => x !== s))
 
   const shown = drivers.filter((d) =>
-    filter === 'archived' ? d.archived : !d.archived && (filter === 'all' || d.sims.includes(filter))
+    filter === 'archived' ? d.archived
+      : filter === 'discord' ? d.auto_added && !d.archived
+      : !d.archived && (filter === 'all' || d.sims.includes(filter))
   )
 
   function addDriver() {
     const id = `new-${uid()}`
     setDrivers((ds) => [
-      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
+      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, main_classes: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
       ...ds,
     ])
     setDirty((s) => new Set(s).add(id))
-    if (filter === 'archived') setFilter(sim)
+    if (filter === 'archived' || filter === 'discord') setFilter(sim)
   }
 
   async function saveAll() {
@@ -112,12 +127,15 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
       for (const x of duplicates) await removeAutoAddedDriver(x.id)
       for (const d of changed) {
         const values = { ...editable(d), name: d.name.trim() }
-        const { error } = d.id.startsWith('new-')
-          ? await supabase.from('drivers').insert(values)
-          : await supabase.from('drivers').update(values).eq('id', d.id)
+        const { data: saved, error } = d.id.startsWith('new-')
+          ? await supabase.from('drivers').insert(values).select('id').single()
+          : await supabase.from('drivers').update(values).eq('id', d.id).select('id').single()
         if (error) throw error
+        const classes = classEdits.get(d.id)
+        if (classes) await setDriverClasses(saved.id as string, classes)
       }
       setDirty(new Set())
+      setClassEdits(new Map())
       await reload()
       await Promise.all([refreshPublicPages(), syncRoles(changed.flatMap((d) => d.profile_id ?? []))])
       router.refresh()
@@ -199,6 +217,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
             <option value="acc">ACC drivers</option>
             <option value="all">Everyone</option>
             <option value="archived">Archived</option>
+            <option value="discord">Added from Discord</option>
           </select>
         </label>
         <button type="button" className={smallBtn} onClick={addDriver}>+ Add driver</button>
@@ -246,9 +265,31 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                   </optgroup>
                 </select>
               </label>
-              {d.auto_added && (
-                <p className="text-[13px] text-muted">Added from Discord. If this person already has an entry, link that one to them and this one is removed.</p>
-              )}
+              {d.auto_added && (() => {
+                // Picking their original entry links it to this person; saving
+                // then removes this one (see saveAll).
+                const person = linkValue(d)
+                const original = drivers.find((x) => !x.auto_added && x.id !== d.id && person && linkValue(x) === person)
+                const candidates = drivers
+                  .filter((x) => !x.auto_added && !x.archived && x.id !== d.id && (!linkValue(x) || x.id === original?.id))
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                return (
+                  <label className={label}>Added from Discord. Same person as…
+                    <select
+                      className={field}
+                      value={original?.id ?? ''}
+                      onChange={(e) => {
+                        if (original) link(original.id, '')
+                        if (e.target.value) link(e.target.value, person)
+                      }}
+                    >
+                      <option value="">No one else on the roster</option>
+                      {candidates.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                    </select>
+                    {original && <span className="text-muted">Save to merge this entry into {original.name}.</span>}
+                  </label>
+                )
+              })()}
               <fieldset className="grid grid-cols-2 gap-x-3 text-sm">
                 <legend className="mb-1 text-[13px] text-[#4a4f57]">Races in · on main lineup</legend>
                 {SIMS.map((s) => (
@@ -268,14 +309,22 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                 <input type="checkbox" className="h-5 w-5" checked={d.academy} onChange={(e) => patch(d.id, { academy: e.target.checked })} />
                 Academy driver <span className="text-muted">(ACADEMY instead of GUEST in race lineups)</span>
               </label>
-              {d.academy && (
-                <label className={label}>Academy class <span className="text-muted">(if they haven’t picked one on their profile)</span>
-                  <select className={field} value={d.academy_class ?? ''} onChange={(e) => patch(d.id, { academy_class: e.target.value || null })}>
-                    <option value="">Not set</option>
-                    {[...new Set(d.sims.flatMap((s) => CLASSES[s]))].map((c) => <option key={c}>{c}</option>)}
-                  </select>
-                </label>
-              )}
+              <fieldset className="flex flex-col gap-1">
+                <legend className="mb-1 text-[13px] text-[#4a4f57]">
+                  Classes <span className="text-muted">(up to {MAX_MAIN_CLASSES}; the first picked decides where they’re listed{d.profile_id ? ', and it changes their profile and Discord class roles' : d.discord_id ? ', and it changes their Discord class roles' : ''})</span>
+                </legend>
+                <div className="flex flex-wrap gap-x-4">
+                  {MAIN_CLASSES.map((c) => {
+                    const on = classesOf(d).includes(c)
+                    return (
+                      <label key={c} className={`flex min-h-10 items-center gap-2 text-sm ${!on && classesOf(d).length >= MAX_MAIN_CLASSES ? 'opacity-40' : ''}`}>
+                        <input type="checkbox" className="h-5 w-5" checked={on} disabled={!on && classesOf(d).length >= MAX_MAIN_CLASSES} onChange={(e) => toggleClass(d, c, e.target.checked)} />
+                        {MAIN_CLASS_LABEL[c]}
+                      </label>
+                    )
+                  })}
+                </div>
+              </fieldset>
               {d.sims.includes('lmu') && (
                 <div className="grid grid-cols-[minmax(0,1fr)_5.5rem] gap-2">
                   <label className={label}>LMU Driver Rank

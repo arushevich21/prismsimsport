@@ -42,6 +42,7 @@ export type Driver = {
   photo_path: string | null
   academy: boolean
   academy_class: string | null
+  main_classes: MainClass[]
   lmu_dr_tier: DriverRankTier | null
   lmu_dr_level: number | null
   lmu_dr_updated_on: string | null

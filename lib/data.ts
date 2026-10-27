@@ -10,7 +10,7 @@ import { MAIN_CLASSES, MAIN_CLASS_IN_SIM, type Driver, type MainClass, type Race
 // Public data for the marketing pages. Every function returns an empty value
 // on failure, so a database hiccup degrades a section instead of the page.
 
-const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
+const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, main_classes, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
 
 // A race stays "next" until a few hours after its last timeslot starts, so
 // the card is still up while it's running.
@@ -121,16 +121,18 @@ const discordMembers = cache(async (): Promise<GuildMember[] | null> => {
   }
 })
 
-// Each driver's class in this sim: the first they picked on their profile,
-// else their class role in Discord (for people who've never signed in).
+// Each driver's class in this sim, from the first of their classes found:
+// picked on their profile, their class roles in Discord (people who've never
+// signed in), or set on their roster entry (drivers linked to no one). The
+// roster editor writes to whichever of those the driver has.
 function classesIn(sim: Sim, picks: Map<string, MainClass[]>, members: GuildMember[] | null) {
   const roleClasses = new Map((members ?? []).flatMap((m) => {
     const classes = MAIN_CLASSES.filter((c) => !!discordEnv.roles.classes[c] && m.roles.includes(discordEnv.roles.classes[c]!))
     return m.user && classes.length ? [[m.user.id, classes] as const] : []
   }))
   const first = (classes: MainClass[] | undefined) => classes?.map((c) => MAIN_CLASS_IN_SIM[sim][c]).find(Boolean) || null
-  return (profileId: string | null, discordId: string | null) =>
-    (profileId && first(picks.get(profileId))) || (discordId && first(roleClasses.get(discordId))) || null
+  return (profileId: string | null, discordId: string | null, own: MainClass[] = []) =>
+    (profileId && first(picks.get(profileId))) || (discordId && first(roleClasses.get(discordId))) || first(own)
 }
 
 // The main lineup, each driver with their class (null when unknown). Who's on
@@ -151,7 +153,7 @@ export async function getMainLineup(sim: Sim): Promise<(Driver & { lineup_class:
   const drivers = (data ?? []) as (RosterDriver & { discord_id: string | null })[]
   const picks = await mainClassesOf(drivers.flatMap((d) => d.profile_id ?? []))
   const classOf = classesIn(sim, picks, members)
-  return drivers.map(({ discord_id, ...d }) => ({ ...withoutProfile(d), lineup_class: classOf(d.profile_id, discord_id) }))
+  return drivers.map(({ discord_id, ...d }) => ({ ...withoutProfile(d), lineup_class: classOf(d.profile_id, discord_id, d.main_classes) }))
 }
 
 // Profiles aren't public, so this reads only main_classes with the service
@@ -170,8 +172,7 @@ const withoutProfile = ({ profile_id: _, ...d }: RosterDriver): Driver => d
 // for this sim (LMU, ACC or both), everyone holding this sim's Academy role in
 // Discord, plus roster drivers ticked Academy. A linked roster entry supplies
 // their flag, nickname and photo, and they drop off once they're on this
-// sim's main lineup. Each goes under the first class they picked on their
-// profile, else the roster's academy class.
+// sim's main lineup. Each goes under their class (see classesIn).
 export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
   const { data, error } = await createPublicClient()
     .from('drivers')
@@ -186,30 +187,28 @@ export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
   }
   const roster = (data ?? []) as (RosterDriver & { discord_id: string | null })[]
   const accounts = await academyAccounts(sim, roster.flatMap((d) => (d.profile_id ? [d.profile_id] : [])))
-  const classIn = (profileId: string | null) =>
-    (profileId && accounts?.classes.get(profileId)?.map((c) => MAIN_CLASS_IN_SIM[sim][c]).find(Boolean)) || null
+  const classOf = classesIn(sim, accounts?.classes ?? new Map(), accounts?.members ?? null)
   const nameOnly = (id: string, name: string, academy_class: string | null): Driver => ({
     id, name, nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [],
-    photo_path: null, academy: true, academy_class, lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null,
+    photo_path: null, academy: true, academy_class, main_classes: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null,
   })
 
-  const list = roster.map(({ discord_id: _, ...d }) => ({ ...withoutProfile(d), academy_class: classIn(d.profile_id) ?? d.academy_class }))
+  const list = roster.map(({ discord_id, ...d }) => ({ ...withoutProfile(d), academy_class: classOf(d.profile_id, discord_id, d.main_classes) }))
   // Account and Discord IDs of everyone listed, so nobody appears twice.
   const listed = new Set(roster.flatMap((d) => [d.profile_id, d.discord_id].filter((id): id is string => !!id)))
   for (const s of accounts?.students ?? []) {
     if (listed.has(s.id)) continue
     const d = accounts!.linked.get(s.id)
     if (d?.main_lineup.includes(sim)) continue
-    list.push(d ? { ...withoutProfile(d), academy: true, academy_class: classIn(s.id) ?? d.academy_class } : nameOnly(`student-${s.id}`, s.name, classIn(s.id)))
+    list.push(d ? { ...withoutProfile(d), academy: true, academy_class: classOf(s.id, null, d.main_classes) } : nameOnly(`student-${s.id}`, s.name, classOf(s.id, null)))
   }
   // Role holders who've never signed in to the site: their roster entry if it's
   // linked to their Discord account, else just their Discord name.
-  const roleClass = classesIn(sim, new Map(), accounts?.members ?? null)
   for (const m of accounts?.withoutAccount ?? []) {
     if (listed.has(m.id)) continue
     const d = accounts!.linkedByDiscord.get(m.id)
     if (d?.main_lineup.includes(sim)) continue
-    list.push(d ? { ...withoutProfile(d), academy: true, academy_class: roleClass(null, m.id) ?? d.academy_class } : nameOnly(`discord-${m.id}`, m.name, roleClass(null, m.id)))
+    list.push(d ? { ...withoutProfile(d), academy: true, academy_class: classOf(null, m.id, d.main_classes) } : nameOnly(`discord-${m.id}`, m.name, classOf(null, m.id)))
   }
   return list.sort((a, b) => a.name.localeCompare(b.name))
 }
