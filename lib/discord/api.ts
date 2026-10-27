@@ -151,7 +151,10 @@ export function setMemberRole(discordUserId: string, roleId: string | undefined,
 export async function setMemberRoles(discordUserId: string, wanted: [roleId: string | undefined, on: boolean][]) {
   if (!discordEnv.guildId) return
   const member = await discord<{ roles: string[] }>('GET', `/guilds/${discordEnv.guildId}/members/${discordUserId}`)
-  if (!member) return
+  if (!member) {
+    if (lastError?.startsWith('Discord says')) lastError = 'they’re not in the PRISM Discord'
+    return
+  }
   for (const [roleId, on] of wanted) {
     if (roleId && member.roles.includes(roleId) !== on) await setMemberRole(discordUserId, roleId, on)
   }
@@ -159,6 +162,13 @@ export async function setMemberRoles(discordUserId: string, wanted: [roleId: str
 
 // "🥉 Team Captain" → "team captain", for matching roles by name.
 const roleKey = (name: string) => name.toLowerCase().replace(/[^\p{L}\p{N} ]/gu, '').replace(/\s+/g, ' ').trim()
+
+// The ID of the server role with this name (emoji and case ignored), if any.
+export async function findRoleId(name: string) {
+  if (!discordEnv.guildId) return undefined
+  const roles = await discord<{ id: string; name: string }[]>('GET', `/guilds/${discordEnv.guildId}/roles`)
+  return roles?.find((r) => roleKey(r.name) === roleKey(name))?.id
+}
 
 // Recolors server roles, picked by ID or by name (emoji and case ignored),
 // touching only the ones that differ. The bot needs Manage Roles, and its own

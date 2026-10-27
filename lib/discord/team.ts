@@ -31,7 +31,7 @@ type RaceRow = {
     sort_order: number
     starts_at: string | null
     discord_channel_id: string | null
-    race_car_drivers: { sort_order: number; drivers: { name: string; nickname: string | null; country_code: string | null; profile_id: string | null; main_lineup: Sim[]; academy: boolean } | null }[]
+    race_car_drivers: { sort_order: number; drivers: { name: string; nickname: string | null; country_code: string | null; profile_id: string | null; main_lineup: Sim[]; academy: boolean; team_sims: Sim[] } | null }[]
   }[]
 }
 
@@ -48,7 +48,7 @@ async function loadRace(raceId: string): Promise<RaceRow | null> {
   const { data } = await createAdminClient()
     .from('races')
     .select(`id, sim, event_name, series, track, race_length, starts_at, stream_url, published, discord_message_id, discord_event_id, discord_slot_events, discord_channel_posts,
-      race_cars ( id, car_name, class, sort_order, starts_at, discord_channel_id, race_car_drivers ( sort_order, drivers ( name, nickname, country_code, profile_id, main_lineup, academy ) ) )`)
+      race_cars ( id, car_name, class, sort_order, starts_at, discord_channel_id, race_car_drivers ( sort_order, drivers ( name, nickname, country_code, profile_id, main_lineup, academy, team_sims ) ) )`)
     .eq('id', raceId)
     .maybeSingle()
   return data as unknown as RaceRow | null
