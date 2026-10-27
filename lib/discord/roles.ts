@@ -3,7 +3,7 @@ import type { Program, Tier } from '@/lib/academy/constants'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { MAIN_CLASSES, MAX_MAIN_CLASSES, type MainClass, type Sim } from '@/lib/types'
 import { CLASS_HEX } from '@/lib/site'
-import { COLORS, botEnabled, discordEnv, getGuildMember, setMemberRoles, setRoleColors, type GuildMember } from './api'
+import { COLORS, botEnabled, discordEnv, findRoleId, getGuildMember, setMemberRoles, setRoleColors, type GuildMember } from './api'
 
 // The Discord roles the site manages, worked out from the site's data in one
 // place so the academy, the roster and profiles can't undo each other's roles.
@@ -90,6 +90,10 @@ export async function adoptAcademyMembers(members: GuildMember[]) {
 // as are archived ones. Add ACC here to do the same for its lineup.
 const LINEUP_ROLES: [Sim, string | undefined][] = [['lmu', discordEnv.roles.lmu]]
 
+// Roles that make someone part of a sim's team without putting them on its main
+// lineup, by role name: their race lineups don't call them guests (team_sims).
+const TEAM_ROLES: [Sim, string][] = [['acc', 'Falcon Motorsport']]
+
 const discordName = (m: GuildMember) => m.nick || m.user!.global_name || m.user!.username
 
 // `members` is the whole server (on a team page rebuild), or with `partial`
@@ -97,11 +101,13 @@ const discordName = (m: GuildMember) => m.nick || m.user!.global_name || m.user!
 // True if anything changed.
 async function syncLineupsFromRoles(members: GuildMember[], partial: boolean) {
   const lineups = LINEUP_ROLES.filter((r): r is [Sim, string] => !!r[1])
-  if (lineups.length === 0) return false
+  const teams = (await Promise.all(TEAM_ROLES.map(async ([sim, name]) => [sim, await findRoleId(name)] as const)))
+    .filter((r): r is [Sim, string] => !!r[1])
+  if (lineups.length === 0 && teams.length === 0) return false
   const admin = createAdminClient()
   const byId = new Map(members.flatMap((m) => (m.user ? [[m.user.id, m] as const] : [])))
-  const { data: rows } = await admin.from('drivers').select('id, profile_id, discord_id, sims, main_lineup, archived')
-  const drivers = (rows ?? []) as { id: string; profile_id: string | null; discord_id: string | null; sims: Sim[]; main_lineup: Sim[]; archived: boolean }[]
+  const { data: rows } = await admin.from('drivers').select('id, profile_id, discord_id, sims, main_lineup, team_sims, archived')
+  const drivers = (rows ?? []) as { id: string; profile_id: string | null; discord_id: string | null; sims: Sim[]; main_lineup: Sim[]; team_sims: Sim[]; archived: boolean }[]
   const { data: profiles } = await admin.from('profiles').select('id, discord_id, display_name, discord_username').not('discord_id', 'is', null)
   const discordOf = new Map((profiles ?? []).map((p) => [p.id as string, p.discord_id as string]))
   const profileOf = new Map((profiles ?? []).map((p) => [p.discord_id as string, p]))
@@ -121,11 +127,12 @@ async function syncLineupsFromRoles(members: GuildMember[], partial: boolean) {
       if (on && !sims.includes(sim)) sims = [...sims, sim]
       main_lineup = on ? [...new Set([...main_lineup, sim])] : main_lineup.filter((s) => s !== sim)
     }
+    const team_sims = teams.filter(([, role]) => roles.includes(role)).map(([sim]) => sim)
     // Someone who's since signed in gets their entry linked to their account.
     const account = profileOf.get(discordId)?.id as string | undefined
     const profileId = d.profile_id ?? (account && !linked.has(account) ? account : null)
-    if (sims.length !== d.sims.length || main_lineup.length !== d.main_lineup.length || profileId !== d.profile_id) {
-      await admin.from('drivers').update({ sims, main_lineup, profile_id: profileId }).eq('id', d.id)
+    if (sims.length !== d.sims.length || main_lineup.length !== d.main_lineup.length || team_sims.join() !== d.team_sims.join() || profileId !== d.profile_id) {
+      await admin.from('drivers').update({ sims, main_lineup, team_sims, profile_id: profileId }).eq('id', d.id)
       changed = true
     }
   }

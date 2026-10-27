@@ -43,6 +43,7 @@ export type Driver = {
   academy: boolean
   academy_class: string | null
   main_classes: MainClass[]
+  team_sims: Sim[]
   lmu_dr_tier: DriverRankTier | null
   lmu_dr_level: number | null
   lmu_dr_updated_on: string | null
@@ -53,10 +54,12 @@ export type DriverRankTier = 'bronze' | 'silver' | 'gold' | 'platinum'
 export const DR_TIERS: DriverRankTier[] = ['bronze', 'silver', 'gold', 'platinum']
 
 // How a driver in a race lineup is labelled when they're not on that sim's
-// main lineup.
-export function lineupBadge(driver: Pick<Driver, 'main_lineup' | 'academy'>, sim: Sim): 'ACADEMY' | 'GUEST' | null {
+// main lineup. Drivers on the team there some other way (team_sims, e.g. the
+// Falcon Motorsport role for ACC) are never guests.
+export function lineupBadge(driver: Pick<Driver, 'main_lineup' | 'academy' | 'team_sims'>, sim: Sim): 'ACADEMY' | 'GUEST' | null {
   if (driver.main_lineup.includes(sim)) return null
-  return driver.academy ? 'ACADEMY' : 'GUEST'
+  if (driver.academy) return 'ACADEMY'
+  return driver.team_sims?.includes(sim) ? null : 'GUEST'
 }
 
 export type RaceCar = {

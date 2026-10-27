@@ -100,7 +100,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   function addDriver() {
     const id = `new-${uid()}`
     setDrivers((ds) => [
-      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, main_classes: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
+      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, main_classes: [], team_sims: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
       ...ds,
     ])
     setDirty((s) => new Set(s).add(id))

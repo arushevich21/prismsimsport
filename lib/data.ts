@@ -10,7 +10,7 @@ import { MAIN_CLASSES, MAIN_CLASS_IN_SIM, type Driver, type MainClass, type Race
 // Public data for the marketing pages. Every function returns an empty value
 // on failure, so a database hiccup degrades a section instead of the page.
 
-const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, main_classes, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
+const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, main_classes, team_sims, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
 
 // A race stays "next" until a few hours after its last timeslot starts, so
 // the card is still up while it's running.
@@ -190,7 +190,7 @@ export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
   const classOf = classesIn(sim, accounts?.classes ?? new Map(), accounts?.members ?? null)
   const nameOnly = (id: string, name: string, academy_class: string | null): Driver => ({
     id, name, nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [],
-    photo_path: null, academy: true, academy_class, main_classes: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null,
+    photo_path: null, academy: true, academy_class, main_classes: [], team_sims: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null,
   })
 
   const list = roster.map(({ discord_id, ...d }) => ({ ...withoutProfile(d), academy_class: classOf(d.profile_id, discord_id, d.main_classes) }))
