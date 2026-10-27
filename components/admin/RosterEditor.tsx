@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
-import { refreshPublicPages, syncRoles } from '@/lib/admin/actions'
+import { listDiscordMembers, refreshPublicPages, removeAutoAddedDriver, syncRoles } from '@/lib/admin/actions'
 import { dangerBtn, errorText, field, getCountryOptions, label, primaryBtn, resizeImage, smallBtn, uid } from '@/lib/admin/shared'
 import { driverPhotoUrl } from '@/lib/photos'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +26,7 @@ const editable = (d: AdminDriver) => ({
   sort_order: d.sort_order,
   archived: d.archived,
   profile_id: d.profile_id,
+  discord_id: d.discord_id,
 })
 
 export default function RosterEditor({ sim }: { sim: Sim }) {
@@ -35,26 +36,37 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   const [filter, setFilter] = useState<Filter>(sim)
   const [busy, setBusy] = useState(false)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
-  const [accounts, setAccounts] = useState<{ id: string; label: string }[]>([])
+  const [accounts, setAccounts] = useState<{ id: string; label: string; discordId: string | null }[]>([])
+  const [members, setMembers] = useState<{ id: string; label: string }[]>([])
 
-  // Site accounts that can be linked to a driver (for Discord roles and mentions).
+  // Who a driver can be linked to: site accounts, and server members who haven't
+  // signed in yet (linked by Discord ID). Linking is how the Discord syncs know
+  // an entry is that person.
   useEffect(() => {
     let cancelled = false
     createClient()
       .from('profiles')
-      .select('id, display_name, discord_username')
+      .select('id, display_name, discord_username, discord_id')
       .order('display_name')
       .then(({ data }) => {
         if (cancelled) return
         setAccounts((data ?? []).map((p) => ({
           id: p.id as string,
+          discordId: p.discord_id as string | null,
           label: [p.display_name, p.discord_username && `@${String(p.discord_username).replace(/#0$/, '')}`].filter(Boolean).join(' · ') || 'Unnamed account',
         })))
       })
+    listDiscordMembers().then((m) => !cancelled && setMembers(m))
     return () => {
       cancelled = true
     }
   }, [])
+  const withAccount = new Set(accounts.map((a) => a.discordId))
+  // The Discord account an entry stands for, however it's linked.
+  const discordOf = (d: AdminDriver) => d.discord_id ?? accounts.find((a) => a.id === d.profile_id)?.discordId ?? null
+  const linkValue = (d: AdminDriver) => (d.profile_id ? `p:${d.profile_id}` : d.discord_id ? `d:${d.discord_id}` : '')
+  const link = (id: string, value: string) =>
+    patch(id, value.startsWith('p:') ? { profile_id: value.slice(2), discord_id: null } : value.startsWith('d:') ? { profile_id: null, discord_id: value.slice(2) } : { profile_id: null, discord_id: null })
 
   const patch = (id: string, p: Partial<AdminDriver>) => {
     setDrivers((ds) => ds.map((d) => (d.id === id ? { ...d, ...p } : d)))
@@ -73,7 +85,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   function addDriver() {
     const id = `new-${uid()}`
     setDrivers((ds) => [
-      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null },
+      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
       ...ds,
     ])
     setDirty((s) => new Set(s).add(id))
@@ -84,9 +96,20 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
     const supabase = createClient()
     const changed = drivers.filter((d) => dirty.has(d.id))
     if (changed.some((d) => !d.name.trim())) return setStatus({ kind: 'error', text: 'Every driver needs a name.' })
+    // Linking an entry to someone replaces the entry the site added for them;
+    // two hand-made entries for one person is a mistake to fix first.
+    const duplicates: AdminDriver[] = []
+    for (const d of changed) {
+      const person = discordOf(d)
+      const other = person && drivers.find((x) => x.id !== d.id && (discordOf(x) === person || (d.profile_id && x.profile_id === d.profile_id)))
+      if (!other) continue
+      if (!other.auto_added) return setStatus({ kind: 'error', text: `${d.name} and ${other.name} are linked to the same person. Unlink one first.` })
+      duplicates.push(other)
+    }
     setBusy(true)
     setStatus(null)
     try {
+      for (const x of duplicates) await removeAutoAddedDriver(x.id)
       for (const d of changed) {
         const values = { ...editable(d), name: d.name.trim() }
         const { error } = d.id.startsWith('new-')
@@ -98,7 +121,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
       await reload()
       await Promise.all([refreshPublicPages(), syncRoles(changed.flatMap((d) => d.profile_id ?? []))])
       router.refresh()
-      setStatus({ kind: 'ok', text: `Saved ${changed.length} driver${changed.length === 1 ? '' : 's'}.` })
+      setStatus({ kind: 'ok', text: `Saved ${changed.length} driver${changed.length === 1 ? '' : 's'}.${duplicates.length ? ` Removed the duplicate entr${duplicates.length === 1 ? 'y' : 'ies'} the site had added: ${duplicates.map((x) => x.name).join(', ')}.` : ''}` })
     } catch (e) {
       setStatus({ kind: 'error', text: errorText(e) })
     } finally {
@@ -213,11 +236,19 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                 </select>
               </label>
               <label className={label}>Linked Discord account
-                <select className={field} value={d.profile_id ?? ''} onChange={(e) => patch(d.id, { profile_id: e.target.value || null })}>
+                <select className={field} value={linkValue(d)} onChange={(e) => link(d.id, e.target.value)}>
                   <option value="">Not linked</option>
-                  {accounts.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  <optgroup label="Signed in to the site">
+                    {accounts.map((a) => <option key={a.id} value={`p:${a.id}`}>{a.label}</option>)}
+                  </optgroup>
+                  <optgroup label="In the server, not signed in yet">
+                    {members.filter((m) => !withAccount.has(m.id) || m.id === d.discord_id).map((m) => <option key={m.id} value={`d:${m.id}`}>{m.label}</option>)}
+                  </optgroup>
                 </select>
               </label>
+              {d.auto_added && (
+                <p className="text-[13px] text-muted">Added from Discord. If this person already has an entry, link that one to them and this one is removed.</p>
+              )}
               <fieldset className="grid grid-cols-2 gap-x-3 text-sm">
                 <legend className="mb-1 text-[13px] text-[#4a4f57]">Races in · on main lineup</legend>
                 {SIMS.map((s) => (
