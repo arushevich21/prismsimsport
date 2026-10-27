@@ -287,12 +287,3 @@ export async function announceNewResults(sim: Sim, season: number) {
   await admin.from('results').update({ announced_at: new Date().toISOString() }).in('id', batch.map((r) => r.id))
   return batch.length
 }
-
-// Gives linked drivers the LMU / ACC driver role when they're on that main
-// lineup, and takes it away when they're not (or archived), unless they've
-// moved up to Driver in the academy.
-export async function syncDriverRoles() {
-  if (!botEnabled()) return
-  const { data: drivers } = await createAdminClient().from('drivers').select('profile_id').not('profile_id', 'is', null)
-  await syncTeamRoles([...new Set((drivers ?? []).map((d) => d.profile_id as string))])
-}

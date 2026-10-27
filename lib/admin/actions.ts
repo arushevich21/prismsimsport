@@ -3,7 +3,8 @@
 import { revalidatePath } from 'next/cache'
 import { getViewer } from '@/lib/auth'
 import { botEnabled, listTextChannels } from '@/lib/discord/api'
-import { announceNewResults, removeRace, syncDriverRoles, syncRace, type RaceSyncReport } from '@/lib/discord/team'
+import { syncTeamRoles } from '@/lib/discord/roles'
+import { announceNewResults, removeRace, syncRace, type RaceSyncReport } from '@/lib/discord/team'
 import type { Sim } from '@/lib/types'
 
 // Called after an admin saves something in edit mode. The writes themselves go
@@ -43,7 +44,9 @@ export async function announceResults(sim: Sim, season: number) {
   return announceNewResults(sim, season)
 }
 
-export async function syncRoles() {
+// Only the drivers just edited: everyone else's lineup follows their Discord
+// role, which may have changed since the editor loaded.
+export async function syncRoles(profileIds: string[]) {
   if (!(await isAdmin())) return
-  await syncDriverRoles()
+  await syncTeamRoles(profileIds)
 }
