@@ -5,7 +5,7 @@ import { getViewer } from '@/lib/auth'
 import { botEnabled, discordEnv, listGuildMembers, listTextChannels, takeDiscordError } from '@/lib/discord/api'
 import { removeDuplicateDriver, setClassRoles, setLineupRoles, syncClassRoles, syncTeamRoles } from '@/lib/discord/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { announceNewResults, removeRace, syncRace, type RaceSyncReport } from '@/lib/discord/team'
+import { announceResultsById, removeRace, syncRace, type RaceSyncReport } from '@/lib/discord/team'
 import { MAIN_CLASSES, MAX_MAIN_CLASSES, isMainClass, type MainClass, type Sim } from '@/lib/types'
 
 // Called after an admin saves something in edit mode. The writes themselves go
@@ -40,9 +40,9 @@ export async function removeRaceFromDiscord(raceId: string) {
   await removeRace(raceId)
 }
 
-export async function announceResults(sim: Sim, season: number) {
+export async function announceResults(sim: Sim, ids: string[]) {
   if (!(await isAdmin())) return 0
-  return announceNewResults(sim, season)
+  return announceResultsById(sim, ids)
 }
 
 // Server members, for linking a roster entry to someone who hasn't signed in

@@ -249,24 +249,35 @@ export async function removeRace(raceId: string) {
   if (data) await removeRaceById(data)
 }
 
-// Posts results that haven't been announced yet, then marks them announced.
-export async function announceNewResults(sim: Sim, season: number) {
-  if (!botEnabled() || !discordEnv.channels.results) return 0
+// Posts the results the admin picked (with a finish), then marks them
+// announced. Picked results are posted even if they were before: picking one
+// is how to post it again. Returns how many were posted.
+export async function announceResultsById(sim: Sim, ids: string[]) {
+  if (!botEnabled() || !discordEnv.channels.results || ids.length === 0) return 0
   const admin = createAdminClient()
   const { data } = await admin
     .from('results')
     .select('id, raced_on, championship, track, car, class, finish')
     .eq('sim', sim)
-    .eq('season', season)
-    .is('announced_at', null)
+    .in('id', ids)
     .not('finish', 'is', null)
     .order('raced_on', { ascending: true, nullsFirst: true })
   const rows = data ?? []
-  if (rows.length === 0) return 0
+  let posted = 0
+  // The graphic fits six results, so more go out as several posts.
+  for (let i = 0; i < rows.length; i += 6) {
+    if (!(await postResults(sim, rows.slice(i, i + 6)))) break
+    posted += Math.min(6, rows.length - i)
+  }
+  return posted
+}
 
-  // One post per save: the results graphic (up to six rows) plus a text line
-  // per result, so they're searchable and readable without opening the image.
-  const batch = rows.slice(0, 6)
+type ResultRow = { id: string; championship: string | null; track: string | null; car: string | null; finish: number }
+
+// One post: the results graphic plus a text line per result, so they're
+// searchable and readable without opening the image.
+async function postResults(sim: Sim, batch: ResultRow[]) {
+  const admin = createAdminClient()
   const medal = (f: number) => (f === 1 ? '🥇' : f === 2 ? '🥈' : f === 3 ? '🥉' : '🏁')
   const best = Math.min(...batch.map((r) => r.finish as number))
   const posted = await postToChannel(discordEnv.channels.results, {
@@ -283,7 +294,7 @@ export async function announceNewResults(sim: Sim, season: number) {
       footer: { text: `PRISM · ${SIM_LABEL[sim]}` },
     }],
   })
-  if (!posted) return 0
+  if (!posted) return false
   await admin.from('results').update({ announced_at: new Date().toISOString() }).in('id', batch.map((r) => r.id))
-  return batch.length
+  return true
 }

@@ -16,6 +16,9 @@ type Row = {
   car: string
   class: string
   finish: string
+  // Already posted to Discord, and whether to post it with this save.
+  announced: boolean
+  post: boolean
 }
 
 async function fetchSeason(sim: Sim, season: number): Promise<{ rows: Row[]; best: string } | { error: string }> {
@@ -35,6 +38,8 @@ async function fetchSeason(sim: Sim, season: number): Promise<{ rows: Row[]; bes
       car: r.car ?? '',
       class: r.class ?? CLASSES[sim][0]!,
       finish: r.finish ? String(r.finish) : '',
+      announced: !!r.announced_at,
+      post: false,
     })),
     best: summary.data?.best_championship ? String(summary.data.best_championship) : '',
   }
@@ -48,11 +53,10 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
   const [best, setBest] = useState('')
   const [dirty, setDirty] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [announce, setAnnounce] = useState(true)
   const [status, setStatus] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null)
 
   const blankRow = useCallback((): Row => ({
-    key: uid(), id: null, raced_on: '', championship: '', track: '', car: '', class: CLASSES[sim][0]!, finish: '',
+    key: uid(), id: null, raced_on: '', championship: '', track: '', car: '', class: CLASSES[sim][0]!, finish: '', announced: false, post: true,
   }), [sim])
 
   const apply = useCallback((result: Awaited<ReturnType<typeof fetchSeason>>) => {
@@ -100,6 +104,7 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
         const { error } = await supabase.from('results').delete().in('id', deleted)
         if (error) throw error
       }
+      const toPost: string[] = []
       for (const r of rows) {
         const values = {
           sim,
@@ -111,10 +116,11 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
           class: r.class || null,
           finish: Number(r.finish) > 0 ? Number(r.finish) : null,
         }
-        const { error } = r.id
-          ? await supabase.from('results').update(values).eq('id', r.id)
-          : await supabase.from('results').insert(values)
+        const { data: saved, error } = r.id
+          ? await supabase.from('results').update(values).eq('id', r.id).select('id').single()
+          : await supabase.from('results').insert(values).select('id').single()
         if (error) throw error
+        if (r.post && values.finish) toPost.push(saved.id as string)
       }
       const bestValue = Number(best.replace(/^p/i, ''))
       const { error: sErr } = bestValue > 0
@@ -122,10 +128,14 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
         : await supabase.from('season_summaries').delete().eq('sim', sim).eq('season', season)
       if (sErr) throw sErr
 
-      const [, posted] = await Promise.all([refreshPublicPages(), announce ? announceResults(sim, season) : Promise.resolve(0)])
+      const [, posted] = await Promise.all([refreshPublicPages(), announceResults(sim, toPost)])
       router.refresh()
       await load(season)
-      setStatus({ kind: 'ok', text: posted ? `Results saved. Posted ${posted} new result${posted === 1 ? '' : 's'} to Discord.` : 'Results saved.' })
+      setStatus(
+        posted < toPost.length
+          ? { kind: 'error', text: `Results saved, but only ${posted} of ${toPost.length} could be posted to Discord. Tick the rest and save again to retry.` }
+          : { kind: 'ok', text: posted ? `Results saved. Posted ${posted} result${posted === 1 ? '' : 's'} to Discord.` : 'Results saved.' }
+      )
     } catch (e) {
       setStatus({ kind: 'error', text: errorText(e) })
     } finally {
@@ -169,7 +179,7 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
 
       <div className="flex flex-col gap-3">
         {rows.map((r) => (
-          <div key={r.key} className="grid grid-cols-2 gap-2 rounded-lg border border-line p-3 md:grid-cols-[9rem_1.4fr_1fr_1fr_7.5rem_5rem_auto] md:items-end md:border-0 md:border-b md:p-0 md:pb-3">
+          <div key={r.key} className="grid grid-cols-2 gap-2 rounded-lg border border-line p-3 md:grid-cols-[9rem_1.4fr_1fr_1fr_7.5rem_5rem_auto_auto] md:items-end md:border-0 md:border-b md:p-0 md:pb-3">
             <label className={label}>Date<input className={field} type="date" value={r.raced_on} onChange={(e) => update(r.key, { raced_on: e.target.value })} /></label>
             <label className={`${label} col-span-2 md:col-span-1`}>Championship · round<input className={field} value={r.championship} onChange={(e) => update(r.key, { championship: e.target.value })} /></label>
             <label className={label}>Track<input className={field} value={r.track} onChange={(e) => update(r.key, { track: e.target.value })} /></label>
@@ -180,6 +190,10 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
               </select>
             </label>
             <label className={label}>Finish<input className={field} type="number" min={1} value={r.finish} onChange={(e) => update(r.key, { finish: e.target.value })} placeholder="P" /></label>
+            <label className="flex min-h-11 items-center gap-2 text-sm whitespace-nowrap" title={r.announced ? 'Already posted. Tick to post it again.' : undefined}>
+              <input type="checkbox" className="h-5 w-5" checked={r.post} disabled={!(Number(r.finish) > 0)} onChange={(e) => update(r.key, { post: e.target.checked })} />
+              {r.announced ? 'Posted · post again' : 'Post to Discord'}
+            </label>
             <button type="button" aria-label="Remove this result" className={`${smallBtn} col-span-2 md:col-span-1`} onClick={() => removeRow(r)}>Remove</button>
           </div>
         ))}
@@ -188,10 +202,10 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
 
       <div className="flex flex-wrap items-center gap-3 border-t border-line pt-4">
         <span className="text-sm text-muted">{dirty ? 'Unsaved changes' : 'All changes saved'}</span>
-        <label className="flex min-h-11 items-center gap-2 text-sm">
-          <input type="checkbox" className="h-5 w-5" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} />
-          Post new results to Discord
-        </label>
+        <span className="text-sm text-muted">{(() => {
+          const n = rows.filter((r) => r.post && Number(r.finish) > 0).length
+          return n ? `${n} result${n === 1 ? '' : 's'} will be posted to Discord` : 'Nothing will be posted to Discord'
+        })()}</span>
         <button type="button" className={`${primaryBtn} ml-auto`} disabled={busy || !dirty} onClick={save}>{busy ? 'Saving…' : 'Save results'}</button>
       </div>
       {status && <p role="status" className={status.kind === 'ok' ? 'text-sm text-ice-deep' : 'text-sm text-[#8a1c1c]'}>{status.text}</p>}
