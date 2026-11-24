@@ -1,6 +1,7 @@
 import { driverPhotoUrl } from '@/lib/photos'
 import type { Driver, DriverRankTier } from '@/lib/types'
 import { Flag, countryName } from './Flag'
+import { DriverSocials } from './SocialIcon'
 
 function initials(name: string) {
   return name
@@ -20,14 +21,14 @@ const TIER_CHIP: Record<DriverRankTier, string> = {
 }
 
 // LMU Driver Rank, entered by an admin from the driver's in-game profile.
-function RankChip({ driver }: { driver: Driver }) {
+export function RankChip({ driver }: { driver: Driver }) {
   const tier = driver.lmu_dr_tier
   if (!tier) return null
   const updated = driver.lmu_dr_updated_on && new Date(`${driver.lmu_dr_updated_on}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
   return (
-    <span className="flex items-center gap-2 text-[13px] text-[#4a4f57] sm:text-sm" title={updated ? `LMU Driver Rank · updated ${updated}` : 'LMU Driver Rank'}>
-      <span className="font-mono text-[11px] font-semibold tracking-wider text-muted">DR</span>
-      <span className={`rounded px-2 py-0.5 font-mono text-[12px] font-semibold text-ink ${TIER_CHIP[tier]}`}>
+    <span className="flex items-center gap-2 text-[13px] text-body-dark sm:text-sm" title={updated ? `LMU Driver Rank, updated ${updated}` : 'LMU Driver Rank'}>
+      <span className="text-xs font-semibold text-muted-dark">DR</span>
+      <span className={`rounded px-2 py-0.5 text-xs font-semibold text-ink ${TIER_CHIP[tier]}`}>
         {tier[0]!.toUpperCase() + tier.slice(1)} {driver.lmu_dr_level ?? ''}
       </span>
     </span>
@@ -37,13 +38,13 @@ function RankChip({ driver }: { driver: Driver }) {
 export function DriverCard({ driver, showRank = false }: { driver: Driver; showRank?: boolean }) {
   const photo = driverPhotoUrl(driver.photo_path)
   return (
-    <article className="flex flex-col overflow-hidden rounded-xl border border-line bg-white">
-      <div className="relative aspect-[4/5] bg-graphite">
+    <article className="flex flex-col overflow-hidden rounded-xl border border-graphite-3 bg-graphite-2 text-white">
+      <div className="relative aspect-[4/5] bg-[#0f1115]">
         {photo ? (
           // eslint-disable-next-line @next/next/no-img-element -- user-uploaded photo from Supabase storage
           <img src={photo} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" />
         ) : (
-          <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center font-heading text-4xl font-bold text-muted-dark/50 sm:text-5xl">
+          <span aria-hidden="true" className="absolute inset-0 flex items-center justify-center font-heading text-4xl font-bold text-graphite-3 sm:text-5xl">
             {initials(driver.name)}
           </span>
         )}
@@ -60,11 +61,12 @@ export function DriverCard({ driver, showRank = false }: { driver: Driver; showR
       </div>
       <div className="flex flex-col gap-2 p-3.5 sm:p-5">
         <h3 className="text-[15px] leading-snug font-semibold sm:text-lg">{driver.name}</h3>
-        <div className="flex items-center gap-2 text-[13px] text-[#4a4f57] sm:text-sm">
+        <div className="flex items-center gap-2 text-[13px] text-body-dark sm:text-sm">
           <Flag code={driver.country_code} />
           <span>{countryName(driver.country_code) ?? 'Country not set'}</span>
         </div>
         {showRank && <RankChip driver={driver} />}
+        <DriverSocials driver={driver} name={driver.name} className="-ml-3.5 -mb-2" />
       </div>
     </article>
   )

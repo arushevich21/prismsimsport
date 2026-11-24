@@ -3,12 +3,14 @@ import { requireSignedIn } from '@/lib/auth'
 import { driverPhotoUrl } from '@/lib/photos'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import type { SocialHandles } from '@/lib/socials'
 import { isMainClass, type DriverRankTier, type Sim } from '@/lib/types'
 import { eyebrow } from '@/lib/ui'
 import { ClassPicker } from './ClassPicker'
 import { DriverDetailsForm } from './DriverDetailsForm'
 import { NameForm } from './NameForm'
 import { PhotoForm } from './PhotoForm'
+import { SocialsForm } from './SocialsForm'
 
 export const metadata: Metadata = { title: 'Your profile', robots: { index: false } }
 
@@ -20,7 +22,7 @@ export default async function ProfilePage() {
   // Their roster entry, if any: it holds what's on their driver card.
   const { data: driver } = await createAdminClient()
     .from('drivers')
-    .select('photo_path, country_code, sims, lmu_dr_tier, lmu_dr_level')
+    .select('photo_path, country_code, sims, lmu_dr_tier, lmu_dr_level, social_instagram, social_twitch, social_youtube, social_tiktok, social_x')
     .eq('profile_id', viewer.user.id)
     .maybeSingle()
 
@@ -46,16 +48,21 @@ export default async function ProfilePage() {
           <h2 className="font-heading text-2xl leading-tight font-bold">Your driver card</h2>
           {driver ? (
             <>
-              <p className="text-[17px] leading-relaxed text-[#4a4f57]">Your photo, flag and rank on the team page.</p>
+              <p className="text-[17px] leading-relaxed text-[#4a4f57]">Your photo, flag, rank and social accounts on the team page.</p>
               <PhotoForm photoUrl={driverPhotoUrl(driver.photo_path as string | null)} />
               <DriverDetailsForm
                 country={driver.country_code as string | null}
                 rank={(driver.sims as Sim[]).includes('lmu') ? { tier: driver.lmu_dr_tier as DriverRankTier | null, level: driver.lmu_dr_level as number | null } : undefined}
               />
+              <div className="flex flex-col gap-3 border-t border-line pt-6">
+                <h3 className="text-lg font-semibold">Social accounts</h3>
+                <p className="text-[15px] leading-relaxed text-[#4a4f57]">Shown as icons on your driver card, so fans can follow you.</p>
+                <SocialsForm handles={driver as Partial<SocialHandles>} />
+              </div>
             </>
           ) : (
             <p className="text-[17px] leading-relaxed text-[#4a4f57]">
-              Once you’re on the team roster, you can set your photo, country and rank for your driver card here.
+              Once you’re on the team roster, you can set your photo, country, rank and social accounts for your driver card here.
             </p>
           )}
         </div>

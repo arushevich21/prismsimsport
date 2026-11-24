@@ -1,3 +1,5 @@
+import type { SocialHandles } from './socials'
+
 export type Sim = 'lmu' | 'acc'
 
 export const SIMS: Sim[] = ['lmu', 'acc']
@@ -31,7 +33,7 @@ export function isSim(value: string): value is Sim {
   return value === 'lmu' || value === 'acc'
 }
 
-export type Driver = {
+export type Driver = SocialHandles & {
   id: string
   name: string
   nickname: string | null

@@ -6,6 +6,7 @@ import { getViewer } from '@/lib/auth'
 import { botEnabled, discordEnv, isGuildMember, setNickname, takeDiscordError } from '@/lib/discord/api'
 import { syncClassRoles } from '@/lib/discord/roles'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { SOCIALS, SOCIAL_COLUMN, SOCIAL_LABEL, parseHandle } from '@/lib/socials'
 import { DR_TIERS, MAX_MAIN_CLASSES, isMainClass, type DriverRankTier } from '@/lib/types'
 
 type Result = { ok: true } | { ok: false; error: string }
@@ -130,6 +131,28 @@ export async function setDriverDetails(_prev: Result | null, fd: FormData): Prom
       Object.assign(values, next, { lmu_dr_updated_on: tier ? new Date().toISOString().slice(0, 10) : null })
     }
   }
+  const { error } = await admin.from('drivers').update(values).eq('id', driver.id)
+  if (error) return { ok: false, error: error.message }
+  revalidatePath('/', 'layout')
+  return { ok: true }
+}
+
+// ── Social accounts ─────────────────────────────────────────────────────────
+
+// Their social accounts, as icons on their driver card. Takes a link or a
+// handle for each; a blank field clears it.
+export async function setDriverSocials(_prev: Result | null, fd: FormData): Promise<Result> {
+  const viewer = await getViewer()
+  if (!viewer) return { ok: false, error: 'Please sign in again.' }
+  const values: Record<string, string | null> = {}
+  for (const platform of SOCIALS) {
+    const handle = parseHandle(platform, String(fd.get(platform) ?? ''))
+    if (handle === null) return { ok: false, error: `That doesn’t look like a ${SOCIAL_LABEL[platform]} link or handle.` }
+    values[SOCIAL_COLUMN[platform]] = handle || null
+  }
+  const admin = createAdminClient()
+  const { data: driver } = await admin.from('drivers').select('id').eq('profile_id', viewer.user.id).maybeSingle()
+  if (!driver) return { ok: false, error: 'You’re not on the team roster yet.' }
   const { error } = await admin.from('drivers').update(values).eq('id', driver.id)
   if (error) return { ok: false, error: error.message }
   revalidatePath('/', 'layout')

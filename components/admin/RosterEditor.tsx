@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react'
 import { listDiscordMembers, refreshPublicPages, removeAutoAddedDriver, setDriverClasses, syncRoles } from '@/lib/admin/actions'
 import { dangerBtn, errorText, field, getCountryOptions, label, primaryBtn, resizeImage, smallBtn, uid } from '@/lib/admin/shared'
 import { driverPhotoUrl } from '@/lib/photos'
+import { SOCIALS, SOCIAL_COLUMN, SOCIAL_LABEL, parseHandle } from '@/lib/socials'
 import { createClient } from '@/lib/supabase/client'
 import { DR_TIERS, MAIN_CLASSES, MAIN_CLASS_LABEL, MAX_MAIN_CLASSES, SIMS, SIM_SHORT, type DriverRankTier, type MainClass, type Sim } from '@/lib/types'
 import { useRoster, type AdminDriver } from './useRoster'
@@ -26,7 +27,42 @@ const editable = (d: AdminDriver) => ({
   archived: d.archived,
   profile_id: d.profile_id,
   discord_id: d.discord_id,
+  // Handles as typed are tidied on blur; anything still unreadable isn't saved.
+  ...Object.fromEntries(SOCIALS.map((p) => [SOCIAL_COLUMN[p], parseHandle(p, d[SOCIAL_COLUMN[p]] ?? '') || null])),
 })
+
+// A driver's social accounts, folded away until opened. Takes a link or a
+// handle; it's tidied to the bare handle when the field loses focus.
+function SocialFields({ d, patch }: { d: AdminDriver; patch: (id: string, values: Partial<AdminDriver>) => void }) {
+  const set = SOCIALS.filter((p) => d[SOCIAL_COLUMN[p]]).length
+  return (
+    <details className="rounded-md border border-line px-3 py-2">
+      <summary className="cursor-pointer text-[13px] text-[#4a4f57]">Social accounts{set > 0 && ` (${set})`}</summary>
+      <div className="mt-2 flex flex-col gap-2">
+        {SOCIALS.map((p) => {
+          const col = SOCIAL_COLUMN[p]
+          const value = d[col] ?? ''
+          const invalid = value !== '' && parseHandle(p, value) === null
+          return (
+            <label key={p} className={label}>{SOCIAL_LABEL[p]}
+              <input
+                className={field}
+                value={value}
+                placeholder="Link or handle"
+                onChange={(e) => patch(d.id, { [col]: e.target.value || null })}
+                onBlur={() => {
+                  const handle = parseHandle(p, value)
+                  if (handle !== null && handle !== value) patch(d.id, { [col]: handle || null })
+                }}
+              />
+              {invalid && <span className="text-[#8a1c1c]">Not a {SOCIAL_LABEL[p]} link or handle. It won’t be saved.</span>}
+            </label>
+          )
+        })}
+      </div>
+    </details>
+  )
+}
 
 export default function RosterEditor({ sim }: { sim: Sim }) {
   const router = useRouter()
@@ -100,7 +136,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
   function addDriver() {
     const id = `new-${uid()}`
     setDrivers((ds) => [
-      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, main_classes: [], team_sims: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
+      { id, name: '', nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [], photo_path: null, academy: false, academy_class: null, main_classes: [], team_sims: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null, social_instagram: null, social_twitch: null, social_youtube: null, social_tiktok: null, social_x: null, archived: false, sort_order: 99, profile_id: null, discord_id: null, auto_added: false },
       ...ds,
     ])
     setDirty((s) => new Set(s).add(id))
@@ -263,6 +299,7 @@ export default function RosterEditor({ sim }: { sim: Sim }) {
                   {countries.map((c) => <option key={c.code} value={c.code}>{c.name}</option>)}
                 </select>
               </label>
+              <SocialFields d={d} patch={patch} />
               <label className={label}>Linked Discord account
                 <select className={field} value={linkValue(d)} onChange={(e) => link(d.id, e.target.value)}>
                   <option value="">Not linked</option>

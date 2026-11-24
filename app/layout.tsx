@@ -10,7 +10,7 @@ const jetbrains = JetBrains_Mono({ subsets: ['latin'], weight: ['400', '600'], v
 export const metadata: Metadata = {
   metadataBase: new URL('https://prismsimsport.app'),
   title: { default: 'PRISM', template: '%s · PRISM' },
-  description: 'Sim racing community and eSports team. Le Mans Ultimate, and ACC with Falcon Motorsport.',
+  description: 'North American sim racing esports team. Hypercar, LMP2, LMP3 and GT3 in Le Mans Ultimate.',
   openGraph: { siteName: 'PRISM', type: 'website', images: [{ url: '/og.png', width: 1200, height: 630, alt: 'PRISM' }] },
   twitter: { card: 'summary_large_image', images: ['/og.png'] },
 }

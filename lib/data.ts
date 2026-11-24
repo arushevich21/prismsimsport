@@ -10,7 +10,7 @@ import { MAIN_CLASSES, MAIN_CLASS_IN_SIM, type Driver, type MainClass, type Race
 // Public data for the marketing pages. Every function returns an empty value
 // on failure, so a database hiccup degrades a section instead of the page.
 
-const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, main_classes, team_sims, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on'
+const DRIVER_COLUMNS = 'id, name, nickname, country_code, role_tag, sims, main_lineup, photo_path, academy, academy_class, main_classes, team_sims, lmu_dr_tier, lmu_dr_level, lmu_dr_updated_on, social_instagram, social_twitch, social_youtube, social_tiktok, social_x'
 
 // A race stays "next" until a few hours after its last timeslot starts, so
 // the card is still up while it's running.
@@ -75,14 +75,17 @@ export async function getPublishedRace(id: string): Promise<Race | null> {
   return data ? toRace(data as unknown as RaceRow) : null
 }
 
-export async function getLatestResults(limit = 3): Promise<Result[]> {
+// The most recent results, newest first; one sim's only when given.
+export async function getLatestResults(limit = 3, sim?: Sim): Promise<Result[]> {
   const supabase = createPublicClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('results')
     .select('*')
     .order('raced_on', { ascending: false, nullsFirst: false })
     .order('created_at', { ascending: false })
     .limit(limit)
+  if (sim) query = query.eq('sim', sim)
+  const { data, error } = await query
   if (error) {
     console.error('[data] latest results:', error.message)
     return []
@@ -191,6 +194,7 @@ export async function getAcademyDrivers(sim: Sim): Promise<Driver[]> {
   const nameOnly = (id: string, name: string, academy_class: string | null): Driver => ({
     id, name, nickname: null, country_code: null, role_tag: null, sims: [sim], main_lineup: [],
     photo_path: null, academy: true, academy_class, main_classes: [], team_sims: [], lmu_dr_tier: null, lmu_dr_level: null, lmu_dr_updated_on: null,
+    social_instagram: null, social_twitch: null, social_youtube: null, social_tiktok: null, social_x: null,
   })
 
   const list = roster.map(({ discord_id, ...d }) => ({ ...withoutProfile(d), academy_class: classOf(d.profile_id, discord_id, d.main_classes) }))

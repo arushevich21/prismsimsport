@@ -179,11 +179,11 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
 
       <div className="flex flex-col gap-3">
         {rows.map((r) => (
-          <div key={r.key} className="grid grid-cols-2 gap-2 rounded-lg border border-line p-3 md:grid-cols-[9rem_1.4fr_1fr_1fr_7.5rem_5rem_auto_auto] md:items-end md:border-0 md:border-b md:p-0 md:pb-3">
+          <div key={r.key} className="grid grid-cols-2 gap-2 rounded-lg border border-line p-3 md:grid-cols-6 md:items-end md:gap-x-3 md:gap-y-2 md:border-0 md:border-b md:p-0 md:pb-4">
             <label className={label}>Date<input className={field} type="date" value={r.raced_on} onChange={(e) => update(r.key, { raced_on: e.target.value })} /></label>
-            <label className={`${label} col-span-2 md:col-span-1`}>Championship · round<input className={field} value={r.championship} onChange={(e) => update(r.key, { championship: e.target.value })} /></label>
-            <label className={label}>Track<input className={field} value={r.track} onChange={(e) => update(r.key, { track: e.target.value })} /></label>
-            <label className={label}>Car<input className={field} value={r.car} onChange={(e) => update(r.key, { car: e.target.value })} /></label>
+            <label className={`${label} col-span-2 md:col-span-3`}>Championship or round<input className={field} value={r.championship} onChange={(e) => update(r.key, { championship: e.target.value })} /></label>
+            <label className={`${label} md:col-span-2`}>Track<input className={field} value={r.track} onChange={(e) => update(r.key, { track: e.target.value })} /></label>
+            <label className={`${label} md:col-span-2`}>Car<input className={field} value={r.car} onChange={(e) => update(r.key, { car: e.target.value })} /></label>
             <label className={label}>Class
               <select className={field} value={r.class} onChange={(e) => update(r.key, { class: e.target.value })}>
                 {CLASSES[sim].map((c) => <option key={c}>{c}</option>)}
@@ -192,7 +192,7 @@ export default function ResultsEditor({ sim, season: initialSeason }: { sim: Sim
             <label className={label}>Finish<input className={field} type="number" min={1} value={r.finish} onChange={(e) => update(r.key, { finish: e.target.value })} placeholder="P" /></label>
             <label className="flex min-h-11 items-center gap-2 text-sm whitespace-nowrap" title={r.announced ? 'Already posted. Tick to post it again.' : undefined}>
               <input type="checkbox" className="h-5 w-5" checked={r.post} disabled={!(Number(r.finish) > 0)} onChange={(e) => update(r.key, { post: e.target.checked })} />
-              {r.announced ? 'Posted · post again' : 'Post to Discord'}
+              {r.announced ? 'Posted, post again' : 'Post to Discord'}
             </label>
             <button type="button" aria-label="Remove this result" className={`${smallBtn} col-span-2 md:col-span-1`} onClick={() => removeRow(r)}>Remove</button>
           </div>

@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -45,22 +46,24 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Rendered under the site header; shows nothing for visitors.
+// Rendered under the site header; shows nothing for visitors. A slim strip:
+// the admin panel is the main way to edit, editing on the page is a toggle.
 export function AdminBar() {
   const { isAdmin, editing, setEditing } = useAdmin()
   if (!isAdmin) return null
-  const seg = 'tap inline-flex items-center rounded-md px-4 text-sm font-semibold'
   return (
-    <div className="bg-iris text-ink">
-      <div className="page-x flex flex-wrap items-center gap-x-5 gap-y-2 py-2">
-        <span className="font-mono text-xs font-semibold tracking-[0.15em]">ADMIN</span>
-        <span className="min-w-0 flex-1 text-sm">
-          {editing ? 'Editing. Outlined blocks can be changed; each block saves on its own.' : 'Previewing what visitors see.'}
-        </span>
-        <div role="group" aria-label="Page mode" className="flex gap-1 rounded-lg bg-white p-1">
-          <button type="button" aria-pressed={editing} onClick={() => setEditing(true)} className={`${seg} ${editing ? 'bg-ink text-white' : ''}`}>Edit</button>
-          <button type="button" aria-pressed={!editing} onClick={() => setEditing(false)} className={`${seg} ${!editing ? 'bg-ink text-white' : ''}`}>Preview</button>
-        </div>
+    <div className="border-b border-graphite-3 bg-graphite-2 text-white">
+      <div className="page-x flex min-h-11 flex-wrap items-center gap-x-5 gap-y-1 py-1 text-sm">
+        <Link href="/manage" className="tap inline-flex items-center font-semibold text-ice hover:text-white">Admin panel</Link>
+        {editing && <span className="text-muted-dark">Outlined blocks can be edited here; each saves on its own.</span>}
+        <button
+          type="button"
+          aria-pressed={editing}
+          onClick={() => setEditing(!editing)}
+          className="tap ml-auto inline-flex items-center rounded-md px-3 font-semibold text-body-dark hover:text-white aria-pressed:bg-iris aria-pressed:text-ink"
+        >
+          {editing ? 'Done editing' : 'Edit on page'}
+        </button>
       </div>
     </div>
   )

@@ -1,4 +1,4 @@
-import { DISCORD_INVITE_URL } from '@/lib/site'
+import { DISCORD_INVITE_URL, classChip } from '@/lib/site'
 import { SIM_SHORT, carStart, raceSlots, type Race } from '@/lib/types'
 import { CarLogo } from './CarLogo'
 import { Countdown, LocalTime } from './Countdown'
@@ -7,20 +7,20 @@ export function NextRaceCard({ race }: { race: Race | null }) {
   if (!race) {
     return (
       <aside aria-label="Next race" className="flex flex-col gap-4 rounded-xl border border-graphite-3 bg-graphite-2 p-6 sm:p-8">
-        <span className="font-mono text-xs tracking-[0.15em] text-ember uppercase">Next race</span>
+        <span className="text-sm font-semibold text-ember">Next race</span>
         <p className="font-heading text-2xl font-bold">No race on the calendar yet.</p>
         <p className="text-body-dark">The next one gets announced in the Discord first.</p>
         {DISCORD_INVITE_URL && (
-          <a href={DISCORD_INVITE_URL} className="font-semibold text-ice hover:text-white">Join the Discord →</a>
+          <a href={DISCORD_INVITE_URL} className="font-semibold text-ice hover:text-white">Join the Discord</a>
         )}
       </aside>
     )
   }
 
-  const subtitle = [race.series ?? race.event_name, race.race_length].filter(Boolean).join(' · ')
+  const subtitle = [race.series ?? race.event_name, race.race_length].filter(Boolean).join(', ')
   const entries = race.cars
-    .map((c) => ({ id: c.id, car: c.car_name, label: [c.car_name, c.class].filter(Boolean).join(' · ') }))
-    .filter((e) => e.label)
+    .map((c) => ({ id: c.id, car: c.car_name, cls: c.class }))
+    .filter((e) => e.car || e.cls)
   const slots = raceSlots(race)
   // With several timeslots, each row names the cars starting in it.
   const slotRows = slots.map((iso, i) => {
@@ -31,8 +31,8 @@ export function NextRaceCard({ race }: { race: Race | null }) {
   return (
     <aside aria-label="Next race" className="flex flex-col gap-6 rounded-xl border border-graphite-3 bg-graphite-2 p-5 sm:p-8">
       <div className="flex items-center justify-between gap-3">
-        <span className="font-mono text-xs tracking-[0.15em] text-ember uppercase">Next race</span>
-        <span className="rounded border border-[#3a3f49] px-2 py-1 font-mono text-xs text-muted-dark">{SIM_SHORT[race.sim]}</span>
+        <span className="text-sm font-semibold text-ember">Next race</span>
+        <span className="rounded border border-[#3a3f49] px-2 py-0.5 text-xs font-semibold text-muted-dark">{SIM_SHORT[race.sim]}</span>
       </div>
       <div className="flex flex-col gap-1.5">
         <p className="font-heading text-2xl leading-tight font-bold sm:text-[1.75rem]">{race.track ?? race.event_name ?? 'Track to be confirmed'}</p>
@@ -53,7 +53,8 @@ export function NextRaceCard({ race }: { race: Race | null }) {
               {entries.map((e) => (
                 <span key={e.id} className="flex items-center justify-end gap-2.5">
                   <CarLogo car={e.car} size="sm" />
-                  {e.label}
+                  {e.car}
+                  {e.cls && <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold text-ink ${classChip(e.cls)}`}>{e.cls}</span>}
                 </span>
               ))}
             </dd>
@@ -61,9 +62,9 @@ export function NextRaceCard({ race }: { race: Race | null }) {
         )}
       </dl>
       <div className="flex flex-wrap gap-x-6 gap-y-2">
-        <a href={`/team/${race.sim}#lineup`} className="tap inline-flex items-center font-semibold text-ice hover:text-white">See the lineup →</a>
+        <a href={`/team/${race.sim}#lineup`} className="tap inline-flex items-center font-semibold text-ice hover:text-white">See the lineup</a>
         {race.stream_url && (
-          <a href={race.stream_url} className="tap inline-flex items-center font-semibold text-ice hover:text-white" rel="noopener">Watch live →</a>
+          <a href={race.stream_url} className="tap inline-flex items-center font-semibold text-ice hover:text-white" rel="noopener">Watch live</a>
         )}
       </div>
     </aside>
