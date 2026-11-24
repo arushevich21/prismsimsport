@@ -38,10 +38,11 @@ export function SiteHeader() {
   const discordHref = DISCORD_INVITE_URL ?? '/community'
 
   return (
-    <header className="sticky top-0 z-40 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85">
-      <div className="page-x flex h-16 items-center gap-6 border-b border-line md:h-[4.5rem]">
-        <Link href="/" aria-label="PRISM home" className="tap flex shrink-0 items-center">
-          <Image src="/brand/prism-logo.png" alt="PRISM" width={435} height={164} priority className="h-8 w-auto md:h-10" />
+    <header className="sticky top-0 z-40 bg-graphite text-white">
+      <div className="page-x flex h-16 items-center gap-6 md:h-[4.5rem]">
+        <Link href="/" aria-label="PRISM home" className="tap flex shrink-0 items-center gap-2.5">
+          <Image src="/brand/prism-mark-light.png" alt="" width={164} height={164} priority className="h-8 w-8 md:h-9 md:w-9" />
+          <span className="font-heading text-lg font-extrabold tracking-[0.22em] md:text-xl">PRISM</span>
         </Link>
 
         <nav aria-label="Primary" className="hidden flex-1 items-center gap-7 text-[15px] font-medium md:flex">
@@ -50,7 +51,7 @@ export function SiteHeader() {
               key={l.href}
               href={l.href}
               aria-current={isActive(l.href) ? 'page' : undefined}
-              className="tap inline-flex items-center text-ink hover:text-iris-deep aria-[current=page]:shadow-[inset_0_-2px_0_var(--color-ink)]"
+              className="tap inline-flex items-center text-body-dark hover:text-white aria-[current=page]:text-white aria-[current=page]:shadow-[inset_0_-2px_0_var(--color-ice)]"
             >
               {l.label}
             </Link>
@@ -58,15 +59,15 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto hidden items-center gap-3 md:flex">
-          <Link href={account.href} className={`tap inline-flex items-center px-2 text-[15px] font-medium text-ink hover:text-iris-deep ${signedIn === null ? 'invisible' : ''}`}>
+          <Link href={account.href} className={`tap inline-flex items-center px-2 text-[15px] font-medium text-body-dark hover:text-white ${signedIn === null ? 'invisible' : ''}`}>
             {account.label}
           </Link>
-          <a href={discordHref} className={`${btn.dark} !py-2.5 text-sm`}>Join the Discord</a>
+          <a href={discordHref} className={`${btn.ice} !py-2.5 text-sm`}>Join the Discord</a>
         </div>
 
         <button
           type="button"
-          className="tap -mr-2 ml-auto inline-flex items-center justify-center rounded-md text-ink md:hidden"
+          className="tap -mr-2 ml-auto inline-flex items-center justify-center rounded-md text-white md:hidden"
           aria-expanded={open}
           aria-controls="mobile-menu"
           aria-label={open ? 'Close menu' : 'Open menu'}
@@ -79,22 +80,22 @@ export function SiteHeader() {
       </div>
 
       {open && (
-        <div id="mobile-menu" className="border-b border-line bg-white md:hidden">
+        <div id="mobile-menu" className="border-t border-graphite-3 bg-graphite md:hidden">
           <nav aria-label="Primary" className="page-x flex flex-col py-2">
             {NAV_LINKS.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 aria-current={isActive(l.href) ? 'page' : undefined}
-                className="flex min-h-12 items-center border-b border-line text-lg font-medium text-ink last:border-0 aria-[current=page]:text-iris-deep"
+                className="flex min-h-12 items-center border-b border-graphite-3 text-lg font-medium text-white last:border-0 aria-[current=page]:text-ice"
               >
                 {l.label}
               </Link>
             ))}
           </nav>
           <div className="page-x flex flex-col gap-3 pb-5">
-            <a href={discordHref} className={btn.dark}>Join the Discord</a>
-            <Link href={account.href} className={`${btn.outlineLight} ${signedIn === null ? 'invisible' : ''}`}>{account.label}</Link>
+            <a href={discordHref} className={btn.ice}>Join the Discord</a>
+            <Link href={account.href} className={`${btn.outlineDark} ${signedIn === null ? 'invisible' : ''}`}>{account.label}</Link>
           </div>
         </div>
       )}

@@ -1,210 +1,224 @@
 import Image from 'next/image'
 import Link from 'next/link'
-import { AdminHint } from '@/components/admin/AdminHint'
 import { Editable } from '@/components/admin/Editable'
+import { DriverList } from '@/components/site/DriverList'
+import { FeaturedResult } from '@/components/site/FeaturedResult'
 import { NextRaceCard } from '@/components/site/NextRaceCard'
-import { Sponsors } from '@/components/site/Sponsors'
-import { PrismBeam } from '@/components/site/PrismBeam'
 import { ResultsList } from '@/components/site/ResultsList'
-import { getLatestResults, getNextRace } from '@/lib/data'
-import { DISCORD_INVITE_URL, PARTNERS } from '@/lib/site'
-import { btn, eyebrow, h1, h2, section } from '@/lib/ui'
+import { SeasonRecord } from '@/components/site/SeasonRecord'
+import { Sponsors } from '@/components/site/Sponsors'
+import { getLatestResults, getMainLineup, getNextRace, getSeasonResults, getSeasons } from '@/lib/data'
+import { DISCORD_INVITE_URL, INSTAGRAM_URL, PHOTOS, SITE_URL, SUPPORTERS, TITLE_SPONSOR } from '@/lib/site'
+import { btn, h1, h2, section } from '@/lib/ui'
 
 // Rebuilt in the background at most every 5 minutes; admin edits refresh it immediately.
 export const revalidate = 300
 
-const PILLARS = [
-  {
-    title: 'eSports team',
-    body: 'Entries in endurance and sprint championships on Le Mans Ultimate, plus the ACC program run with Falcon Motorsport.',
-    href: '/team',
-    link: 'Lineups and results',
-    bar: 'bg-ice',
-    text: 'text-ice-deep',
-    icon: <path d="M4 21V4M4 4h13l-2 4 2 4H4" />,
-  },
-  {
-    title: 'Community',
-    body: 'A Discord full of sim racers who care about the same tenth you do: setups, replays and people to run laps with.',
-    href: '/community',
-    link: 'Join the community',
-    bar: 'bg-iris',
-    text: 'text-iris-deep',
-    icon: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" /><circle cx="17" cy="9" r="2.5" /><path d="M17 14.5c2.3 0 4 1.4 4.5 4" /></>,
-  },
-  {
-    title: 'Academy',
-    body: '1-on-1 coaching, telemetry review, setups and a video library for drivers who want to find more pace.',
-    href: '/academy',
-    link: 'Get coached',
-    bar: 'bg-ember',
-    text: 'text-ember-deep',
-    icon: <><path d="M3 17l5-6 4 3 6-8" /><path d="M14 6h4v4" /><path d="M3 21h18" /></>,
-  },
-]
-
-const STEPS = [
-  { title: 'Join the Discord', body: 'Say hi, grab your sim roles, find people to run with.' },
-  { title: 'Get faster with the Academy', body: '1-on-1 coaching, telemetry review and setups when you want to step up.' },
-  { title: 'Try out for the team', body: 'Get in touch with our captains!' },
-]
+const link = 'tap inline-flex shrink-0 items-center text-[15px] font-semibold text-ice hover:text-white'
+const body = 'text-[17px] leading-relaxed text-body-dark'
 
 export default async function HomePage() {
-  const [race, results] = await Promise.all([getNextRace(), getLatestResults(3)])
+  const [race, results, lineup, seasons] = await Promise.all([
+    // The home page is PRISM's own LMU program; ACC lives on its team page.
+    getNextRace('lmu'),
+    getLatestResults(5, 'lmu'),
+    getMainLineup('lmu'),
+    getSeasons('lmu'),
+  ])
+  const season = seasons[0] ?? new Date().getFullYear()
+  const record = await getSeasonResults('lmu', season)
   const discordHref = DISCORD_INVITE_URL ?? '/community'
+  // The latest result with a finishing position is set large; the rest are listed.
+  const latest = results.find((r) => r.finish) ?? results[0]
+  const earlier = results.filter((r) => r !== latest)
+
+  const hero = PHOTOS.hero
+  const feature = PHOTOS.feature
+  const intro = (
+    <div className="flex flex-col gap-6 sm:gap-7">
+      <h1 className={h1}>North America&apos;s challenge to the front of the grid.</h1>
+      <p className={`max-w-xl ${body} sm:text-lg`}>
+        PRISM is a sim racing esports team. We race Hypercar, LMP2, LMP3 and GT3 in Le Mans Ultimate endurance
+        and sprint championships.
+      </p>
+      <div className="flex flex-col gap-3 xs:flex-row">
+        <Link href="/team" className={btn.ice}>Meet the drivers</Link>
+        <Link href="/team#results" className={btn.outlineDark}>See our results</Link>
+      </div>
+    </div>
+  )
+  const raceCard = (
+    <Editable editor="race">
+      <NextRaceCard race={race} />
+    </Editable>
+  )
+  const seasonRecord = record.races > 0 && <SeasonRecord stats={record} caption={`${season} season in Le Mans Ultimate`} />
+
+  // Tells search engines this is a sports team: its drivers, sponsors and accounts.
+  const structuredData = {
+    '@context': 'https://schema.org',
+    '@type': 'SportsTeam',
+    name: 'PRISM Sim Sport',
+    alternateName: 'PRISM',
+    sport: 'Sim racing',
+    url: SITE_URL,
+    logo: `${SITE_URL}/brand/prism-logo.png`,
+    description: 'North American sim racing esports team racing Hypercar, LMP2, LMP3 and GT3 in Le Mans Ultimate.',
+    sameAs: [INSTAGRAM_URL, DISCORD_INVITE_URL].filter(Boolean),
+    athlete: lineup.map((d) => ({ '@type': 'Person', name: d.name })),
+    sponsor: [TITLE_SPONSOR, ...SUPPORTERS].map((s) => ({ '@type': 'Organization', name: s.name, ...(s.url ? { url: s.url } : {}) })),
+  }
 
   return (
-    <>
-      {/* Hero */}
-      <section className="bg-graphite text-white">
-        <div className="page-x grid items-center gap-12 py-14 sm:py-20 lg:grid-cols-[1.1fr_1fr] lg:gap-14 lg:py-24">
-          <div className="flex flex-col gap-6 sm:gap-7">
-            <div className="flex items-center gap-3">
-              <Image src="/brand/prism-mark-light.png" alt="" width={164} height={164} className="h-8 w-8 sm:h-9 sm:w-9" />
-              <span className={`${eyebrow} text-ice`}>Le Mans Ultimate · ACC</span>
+    <div className="bg-graphite text-white">
+      <script
+        type="application/ld+json"
+        // Escapes "<" so a driver's name can't close the script tag.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, '\\u003c') }}
+      />
+      {hero ? (
+        <>
+          {/* Hero: the car on the right, the headline on the left where the photo fades to graphite */}
+          <section className="relative isolate overflow-hidden">
+            <div className="relative aspect-[16/9] lg:absolute lg:inset-y-0 lg:right-0 lg:aspect-auto lg:w-[78%]">
+              <Image src={hero.src} alt={hero.alt} fill priority sizes="(min-width: 64rem) 78vw, 100vw" className="object-cover" />
+              <div aria-hidden="true" className="absolute inset-0 bg-[linear-gradient(0deg,var(--color-graphite)_0%,transparent_40%)] lg:bg-[linear-gradient(90deg,var(--color-graphite)_0%,rgb(21_23_28/0.55)_30%,transparent_60%),linear-gradient(0deg,var(--color-graphite)_0%,transparent_30%)]" />
             </div>
-            <h1 className={h1}>A team you race for. A community you race with.</h1>
-            <p className="max-w-xl text-[17px] leading-relaxed text-body-dark sm:text-lg">
-              PRISM is a sim racing community and a competitive eSports team. Le Mans Ultimate is home. In ACC we race
-              alongside our partners at Falcon Motorsport.
-            </p>
-            <div className="flex flex-col gap-3 xs:flex-row">
-              <a href={discordHref} className={btn.ice}>Join the Discord</a>
-              <Link href="/team" className={btn.outlineDark}>Meet the team</Link>
+            <div className="page-x relative -mt-10 pb-12 sm:-mt-16 sm:pb-16 lg:mt-0 lg:flex lg:min-h-[min(82vh,46rem)] lg:items-center lg:py-24">
+              <div className="lg:max-w-[42rem]">{intro}</div>
+            </div>
+          </section>
+
+          {/* Race week: the season so far and the next race, side by side like a pit wall screen */}
+          <section className="border-t border-graphite-3">
+            <div className={`page-x grid items-center gap-10 py-10 sm:py-14 ${seasonRecord ? 'lg:grid-cols-[1.2fr_1fr] lg:gap-16' : ''}`}>
+              {seasonRecord}
+              <div className={seasonRecord ? '' : 'max-w-xl'}>{raceCard}</div>
+            </div>
+          </section>
+        </>
+      ) : (
+        /* Hero without a photo: the headline beside the next-race panel */
+        <section>
+          <div className="page-x relative py-14 sm:py-20 lg:py-24">
+            <div className="grid items-center gap-12 lg:grid-cols-[1.4fr_1fr] lg:gap-16">
+              {intro}
+              {raceCard}
             </div>
           </div>
-          <Editable editor="race">
-            <NextRaceCard race={race} />
-          </Editable>
+          {seasonRecord && (
+            <div className="border-t border-graphite-3 bg-graphite">
+              <div className="page-x pt-5">{seasonRecord}</div>
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Title sponsor, where pro teams put theirs: straight under the hero */}
+      <a
+        href={TITLE_SPONSOR.url}
+        className="group block border-y border-graphite-3 bg-graphite-2"
+        aria-label={`Presented by ${TITLE_SPONSOR.name}`}
+      >
+        <div className="page-x flex flex-col items-start gap-3 py-6 sm:flex-row sm:items-center sm:gap-6">
+          <span className="text-sm text-muted-dark">Presented by</span>
+          <Image
+            src={TITLE_SPONSOR.logo.src}
+            alt=""
+            width={TITLE_SPONSOR.logo.width}
+            height={TITLE_SPONSOR.logo.height}
+            className="h-6 w-auto sm:h-7"
+          />
+          <span className="text-sm text-muted-dark group-hover:text-white sm:ml-auto">{TITLE_SPONSOR.blurb}</span>
+        </div>
+      </a>
+
+      {/* Results: the latest one set large, the rest as a short list */}
+      <section className={`${section} flex flex-col gap-6`}>
+        <div className="flex items-end justify-between gap-4">
+          <h2 className={h2}>Results</h2>
+          <Link href="/team#results" className={link}>All results</Link>
+        </div>
+        {latest ? (
+          <>
+            <FeaturedResult result={latest} />
+            {earlier.length > 0 && <ResultsList results={earlier} empty="" />}
+          </>
+        ) : (
+          <ResultsList results={[]} empty="Results show up here after our next race." />
+        )}
+      </section>
+
+      {/* Drivers, as a roster */}
+      <section className="border-t border-graphite-3">
+        <div className={`${section} flex flex-col gap-6`}>
+          <div className="flex items-end justify-between gap-4">
+            <h2 className={h2}>Drivers</h2>
+            <Link href="/team" className={link}>Full team and academy</Link>
+          </div>
+          {lineup.length > 0 ? (
+            <DriverList drivers={lineup} />
+          ) : (
+            <p className="text-muted-dark">The lineup is being finalised.</p>
+          )}
         </div>
       </section>
 
-      {/* Where we race */}
-      <section className="border-b border-line">
-        <div className="page-x flex flex-col gap-4 py-7 md:flex-row md:items-center md:gap-14">
-          <span className={`${eyebrow} text-muted`}>Where we race</span>
-          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-            <span className="font-heading text-base font-bold sm:text-lg">Le Mans Ultimate</span>
-            <span className="text-sm text-muted">Primary platform</span>
-          </div>
-          <div className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:gap-3">
-            <span className="font-heading text-base font-bold sm:text-lg">Assetto Corsa Competizione</span>
-            <span className="text-sm text-muted">With Falcon Motorsport</span>
-          </div>
-        </div>
-      </section>
+      {/* Photo break, signed with the car's number */}
+      {feature && (
+        <figure className="relative h-[clamp(18rem,42vw,36rem)] overflow-hidden">
+          <Image src={feature.src} alt={feature.alt} fill sizes="100vw" className="object-cover object-[50%_85%]" />
+          {(feature.number || feature.caption) && (
+            <figcaption className="absolute inset-x-0 bottom-0 bg-[linear-gradient(0deg,rgb(21_23_28/0.9)_0%,transparent_100%)] pt-16 pb-5">
+              <span className="page-x flex items-end gap-4">
+                {feature.number && <span className="font-heading text-6xl leading-[0.85] font-extrabold sm:text-8xl">{feature.number}</span>}
+                {feature.caption && <span className="pb-1 text-sm text-body-dark">{feature.caption}</span>}
+              </span>
+            </figcaption>
+          )}
+        </figure>
+      )}
 
-      {/* Pillars */}
-      <section className={`${section} flex flex-col gap-10 sm:gap-12`}>
-        <div className="flex max-w-2xl flex-col gap-3.5">
-          <h2 className={h2}>One team, three sides.</h2>
-          <p className="text-[17px] leading-relaxed text-[#4a4f57]">
-            Race for the team, race with the community, or come to get faster. Most people end up doing all three.
-          </p>
+      {/* Partners */}
+      <section id="partners" className="scroll-mt-24 bg-graphite-2">
+        <div className="page-x flex flex-col gap-3 pt-16 sm:pt-24">
+          <h2 className={h2}>Partners</h2>
+          <p className={`max-w-2xl ${body}`}>Want your brand on our cars and broadcasts? Talk to us in the Discord.</p>
         </div>
-        <div className="grid gap-4 sm:gap-6 md:grid-cols-3">
-          {PILLARS.map((p) => (
-            <article key={p.title} className="flex flex-col overflow-hidden rounded-xl border border-line">
-              <div aria-hidden="true" className={`h-1 ${p.bar}`} />
-              <div className="flex flex-1 flex-col gap-3.5 p-6 sm:p-8">
-                <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className={p.text}>
-                  {p.icon}
-                </svg>
-                <h3 className="font-heading text-xl font-bold sm:text-[1.35rem]">{p.title}</h3>
-                <p className="flex-1 leading-relaxed text-[#4a4f57]">{p.body}</p>
-                <Link href={p.href} className={`tap inline-flex items-center text-[15px] font-semibold ${p.text}`}>
-                  {p.link} →
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+        <Sponsors />
       </section>
 
       {/* About */}
-      <section id="about" className="bg-mist">
-        <div className={`${section} grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-center lg:gap-16`}>
-          <div className="flex flex-col gap-5 sm:gap-6">
-            <span className={`${eyebrow} text-iris-deep`}>About us</span>
-            <h2 className={h2}>Why I started PRISM.</h2>
-            <p className="text-[17px] leading-[1.7] text-[#33373e] sm:text-lg">
-              I&apos;m Anton Rushevich. Everything I teach, I taught myself first: years of trial, error and obsessing
-              over the data. I&apos;ve spent 5+ years coaching across multiple disciplines, and I captain our LMU GT3 team.
-            </p>
-            <p className="text-[17px] leading-[1.7] text-[#33373e] sm:text-lg">
-              I started PRISM because North American sim racing was missing something: a real community. The top of this
-              sport has always leaned European, and the drivers over here who can run with them rarely had a place to come
-              together, push each other and get seen.
-            </p>
-            <p className="text-[17px] leading-[1.7] text-[#33373e] sm:text-lg">
-              PRISM is that place, and it&apos;s built to do two things at once. Grow into a large, thriving community
-              where anyone can find people to race with. And put a team on the grid that challenges at the very top,
-              proving NA has drivers who can go toe-to-toe with the best in Europe.
-            </p>
-            <div className="flex flex-col gap-0.5 border-t border-[#d5dae1] pt-4">
-              <span className="font-semibold">Anton Rushevich</span>
-              <span className="text-sm text-muted">Founder · LMU GT3 team captain · Head coach</span>
-            </div>
-          </div>
-          <div className="flex flex-col gap-3.5 rounded-xl border border-line bg-white p-6 sm:p-8">
-            <PrismBeam className="h-auto w-full max-w-[280px]" />
-            <h3 className="font-heading text-lg font-bold">Why “PRISM”</h3>
-            <p className="leading-[1.7] text-[#33373e]">
-              Shine one beam of light into a prism and a whole spectrum comes out the other side. That&apos;s what we want
-              for every driver who joins. Someone arrives with raw pace and a lot of questions, and leaves with the data,
-              the racecraft and the confidence to race anyone, anywhere. One light in, every colour out.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Latest results */}
-      <section className={`${section} flex flex-col gap-7`}>
-        <div className="flex items-end justify-between gap-4">
-          <h2 className={h2}>Latest results</h2>
-          <Link href="/team#results" className="tap inline-flex shrink-0 items-center text-[15px] font-semibold text-iris-deep">
-            All results →
-          </Link>
-        </div>
-        <AdminHint>Results are edited on the Team page, per sim and season. <Link href="/team#results" className="font-semibold text-iris-deep underline">Go to results</Link></AdminHint>
-        <ResultsList results={results} showSim empty="Results show up here after our next race." />
-      </section>
-
-      {/* Partners */}
-      <section className="bg-graphite text-white">
-        <div className={`${section} grid items-center gap-10 lg:grid-cols-2 lg:gap-14`}>
-          <a href={PARTNERS.falcon.url} className="flex justify-center rounded-xl border border-graphite-3 bg-graphite-2 p-8 sm:p-12" aria-label="Falcon Motorsport">
-            <Image src="/brand/falcon-logo.png" alt="Falcon Motorsport" width={1200} height={848} className="h-auto w-full max-w-[320px]" />
-          </a>
-          <div className="flex flex-col gap-5">
-            <span className={`${eyebrow} text-ember`}>ACC partner</span>
-            <h2 className={h2}>Driven by competition. United by precision.</h2>
-            <p className="text-[17px] leading-relaxed text-body-dark sm:text-lg">
-              Falcon Motorsport brings together dedicated sim racers to compete in championships and endurance events
-              across Assetto Corsa Competizione. Every lap demands focus, every decision matters, and every race is an
-              opportunity to prove ourselves.
-            </p>
-          </div>
-        </div>
-        <div className="border-t border-graphite-3">
-          <Sponsors />
+      <section className={`${section} grid gap-8 lg:grid-cols-[1fr_1.4fr] lg:gap-16`}>
+        <h2 className={h2}>About PRISM</h2>
+        <div className="flex flex-col gap-5">
+          <p className={`${body} sm:text-lg sm:leading-[1.7]`}>
+            The top of sim racing has always leaned European. North America has drivers who can run with them, but rarely a
+            team that brings them together, pushes them and gets them seen.
+          </p>
+          <p className={`${body} sm:text-lg sm:leading-[1.7]`}>
+            PRISM is that team. One beam of light in, a full spectrum out: drivers arrive with raw pace and leave with the
+            data, the racecraft and the confidence to race anyone, anywhere.
+          </p>
+          <p className="text-sm text-muted-dark">Anton Rushevich, founder, LMU GT3 team captain and head coach</p>
         </div>
       </section>
 
       {/* Join */}
-      <section className={`${section} flex flex-col gap-10`}>
-        <h2 className={h2}>Pull up a seat.</h2>
-        <ol className="grid gap-6 md:grid-cols-3">
-          {STEPS.map((s, i) => (
-            <li key={s.title} className="flex flex-col gap-2.5 border-t-2 border-ink pt-5">
-              <span className="font-mono text-[13px] text-muted">0{i + 1}</span>
-              <span className="text-lg font-semibold">{s.title}</span>
-              <span className="leading-relaxed text-[#4a4f57]">{s.body}</span>
-            </li>
-          ))}
-        </ol>
-        <a href={discordHref} className={`${btn.dark} self-stretch xs:self-start`}>Join the Discord</a>
+      <section className="border-t border-graphite-3">
+        <div className={`${section} flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-16`}>
+          <div className="flex max-w-2xl flex-col gap-4">
+            <h2 className={h2}>Race for PRISM</h2>
+            <p className={body}>
+              Lineups are picked from our Discord and our academy. Join, train with our coaches, and earn a seat.
+            </p>
+          </div>
+          <div className="flex flex-col gap-3 xs:flex-row lg:shrink-0">
+            <a href={discordHref} className={btn.ice}>Join the Discord</a>
+            <Link href="/academy" className={btn.outlineDark}>Explore the academy</Link>
+          </div>
+        </div>
       </section>
-    </>
+    </div>
   )
 }

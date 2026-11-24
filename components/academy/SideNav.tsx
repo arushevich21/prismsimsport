@@ -8,7 +8,9 @@ export type NavItem = { href: string; label: string; badge?: number }
 // Sidebar on desktop; a horizontally scrolling tab strip on phones.
 export function SideNav({ title, items, accent }: { title: string; items: NavItem[]; accent: string }) {
   const pathname = usePathname()
-  const active = (href: string) => pathname === href || (href !== '/coach' && pathname.startsWith(href + '/'))
+  // The first item is the section's home (/coach, /admin): active only on itself.
+  const root = items[0]?.href
+  const active = (href: string) => pathname === href || (href !== root && pathname.startsWith(href + '/'))
 
   return (
     <nav aria-label={title} className="lg:sticky lg:top-24 lg:w-60 lg:shrink-0 lg:self-start">

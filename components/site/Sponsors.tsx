@@ -1,6 +1,5 @@
 import Image from 'next/image'
 import { SUPPORTERS, TITLE_SPONSOR, type Sponsor } from '@/lib/site'
-import { eyebrow } from '@/lib/ui'
 
 // One sponsor: label, logo, then their line about themselves.
 function SponsorRow({ label, s, className = '' }: { label: string; s: Sponsor; className?: string }) {
@@ -11,7 +10,7 @@ function SponsorRow({ label, s, className = '' }: { label: string; s: Sponsor; c
   )
   return (
     <div className={`flex flex-col gap-5 md:flex-row md:items-center md:gap-10 ${className}`}>
-      <span className={`${eyebrow} shrink-0 text-muted-dark md:w-32`}>{label}</span>
+      <span className="shrink-0 text-sm text-muted-dark md:w-32">{label}</span>
       {/* Fixed-width logo column, so the blurbs line up whatever the logo's shape. */}
       {s.url ? <a href={s.url} aria-label={s.name} className="shrink-0 md:w-80">{mark}</a> : <span className="shrink-0 md:w-80">{mark}</span>}
       {s.blurb && <p className="flex-1 leading-relaxed text-body-dark">{s.blurb}</p>}
